@@ -1,21 +1,21 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use anyhow::{Context, Result};
 use colored::Colorize;
 
-use crate::chats::sync_chats;
 use crate::ssh::{default_ssh_archive, has_ssh_keys, restore_ssh};
 use crate::util::{
     clean_stale_home_manager_backups, detect_flake_dir, get_hostname, get_target_user,
-    print_banner, print_warn, prompt_confirm, run_interactive,
+    print_banner, print_err, print_warn, prompt_confirm, run_interactive,
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RebuildAction {
     Switch,
     Test,
-    Boot,
     Build,
+    Vm,
     Dry,
     Clean,
 }
@@ -25,8 +25,8 @@ impl RebuildAction {
         match self {
             RebuildAction::Switch => "switch",
             RebuildAction::Test => "test",
-            RebuildAction::Boot => "boot",
             RebuildAction::Build => "build",
+            RebuildAction::Vm => "build-vm",
             RebuildAction::Dry => "switch", // nh os switch --dry
             RebuildAction::Clean => "clean",
         }
@@ -38,6 +38,10 @@ impl RebuildAction {
 
     pub fn is_clean(&self) -> bool {
         matches!(self, RebuildAction::Clean)
+    }
+
+    pub fn is_vm(&self) -> bool {
+        matches!(self, RebuildAction::Vm)
     }
 }
 
@@ -97,7 +101,7 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
     let flake_dir = detect_flake_dir(opts.flake_dir.as_deref())?;
     let host = opts.host.unwrap_or_else(get_hostname);
 
-    // Update flake inputs if requested
+    // Update flake inputs if requested (-u)
     if opts.update {
         print_banner(&format!(
             "Updating flake inputs in {}...",
@@ -120,6 +124,63 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
             c
         };
         run_interactive(&mut cmd)?;
+    }
+
+    // Handle VM build (-v)
+    if opts.action.is_vm() {
+        print_banner(&format!(
+            "Building NixOS VM configuration for host: {}...",
+            host.bold()
+        ));
+
+        let vms_dir = user_info.home_dir.join("vmachines");
+        fs::create_dir_all(&vms_dir)
+            .with_context(|| format!("Failed to create VM directory at {}", vms_dir.display()))?;
+
+        // Run nixos-rebuild build-vm
+        let mut vm_cmd = Command::new("nixos-rebuild");
+        vm_cmd
+            .arg("build-vm")
+            .arg("--flake")
+            .arg(format!("{}#{}", flake_dir.display(), host));
+
+        if opts.show_trace {
+            vm_cmd.arg("--show-trace");
+        }
+        for arg in &opts.extra_args {
+            vm_cmd.arg(arg);
+        }
+
+        run_interactive(&mut vm_cmd)?;
+
+        // Find result symlink
+        let result_link = Path::new("result");
+        let result_bin = Path::new("result/bin");
+        if result_bin.is_dir() {
+            print_banner(&format!("VM successfully built. Binaries available in {}", result_bin.display()));
+            // Copy or link vm runner to ~/vmachines/
+            if let Ok(entries) = fs::read_dir(result_bin) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        let vm_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        let target_path = vms_dir.join(format!("{}-runner", vm_name));
+                        let _ = fs::copy(&path, &target_path);
+                        print_banner(&format!("VM runner copied to {}", target_path.display()));
+                        
+                        // Launch the VM
+                        print_banner(&format!("Launching VM {}...", vm_name));
+                        let mut run_cmd = Command::new(&path);
+                        run_cmd.current_dir(&vms_dir);
+                        let _ = run_interactive(&mut run_cmd);
+                    }
+                }
+            }
+        } else {
+            print_banner(&format!("VM files stored in {}", vms_dir.display()));
+        }
+
+        return Ok(());
     }
 
     // Clean up stale Home Manager backup files
@@ -164,14 +225,7 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
     // Post-build hooks on switch or test
     let is_switch_or_test = matches!(opts.action, RebuildAction::Switch | RebuildAction::Test);
     if is_switch_or_test && !opts.dry && !opts.action.is_dry() {
-        // 1. Sync Antigravity IDE chats
-        if !opts.no_chat_sync {
-            if let Err(e) = sync_chats(Some(&user_info.home_dir)) {
-                print_warn(&format!("could not sync Antigravity IDE chat history: {}", e));
-            }
-        }
-
-        // 2. Interactive SSH key restoration check
+        // 1. Interactive SSH key restoration check
         if !opts.no_ssh_prompt {
             let secrets_archive = default_ssh_archive(Some(&flake_dir));
             let ssh_dir = user_info.home_dir.join(".ssh");
@@ -187,7 +241,7 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
             }
         }
 
-        // 3. Reload Hyprland if running
+        // 2. Reload Hyprland if running
         if !opts.no_hypr_reload {
             reload_hyprland_if_running(&user_info.username, user_info.uid);
         }

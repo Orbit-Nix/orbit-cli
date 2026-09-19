@@ -6,10 +6,9 @@ use crate::rebuild::{RebuildAction, RebuildOptions};
 #[command(
     name = "orbit",
     version,
-    about = "Unified system rebuilder, sync, and secret management tool for OrbitOS / NixOS",
-    long_about = "Orbit CLI: A fast, standalone Rust rebuilder and system management tool for NixOS.\n\
-                  Drop-in replacement for rebuild.nix with support for nh visual diffs, flake updates,\n\
-                  Antigravity IDE chat history synchronization, and encrypted SSH key management."
+    about = "Unified system rebuilder, sync, package runner, and secret management tool for OrbitOS / NixOS",
+    long_about = "Orbit CLI: A fast, modular system management and rebuilder tool for NixOS.\n\
+                  Supports visual diffs, interactive package running (yay-style), flake updates, git synchronization, VM testing, and encrypted secrets."
 )]
 pub struct OrbitCli {
     #[command(subcommand)]
@@ -22,25 +21,39 @@ pub struct OrbitCli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Rebuild and apply NixOS system configuration
+    /// Rebuild and apply NixOS system configuration with new options
     #[command(name = "rebuild")]
     Rebuild(RebuildArgs),
 
-    /// Build and activate configuration (default)
-    #[command(name = "switch")]
-    Switch(CommonRebuildArgs),
+    /// Search and drop into nix-shell with package(s) installed (yay-style selection)
+    #[command(name = "run")]
+    Run {
+        /// Package name or search query
+        query: String,
+    },
 
-    /// Build and activate without adding to bootloader menu
+    /// Search, install, and immediately launch GUI application(s)
+    #[command(name = "run-gui")]
+    RunGui {
+        /// Package name or search query
+        query: String,
+    },
+
+    /// Update flake inputs without rebuilding
+    #[command(name = "update")]
+    Update,
+
+    /// Build system generation
+    #[command(name = "build")]
+    Build(CommonRebuildArgs),
+
+    /// Test build without adding to bootloader menu
     #[command(name = "test")]
     Test(CommonRebuildArgs),
 
-    /// Build and add to bootloader menu without activating now
-    #[command(name = "boot")]
-    Boot(CommonRebuildArgs),
-
     /// Build system generation only
-    #[command(name = "build")]
-    Build(CommonRebuildArgs),
+    #[command(name = "build-only")]
+    BuildOnly(CommonRebuildArgs),
 
     /// Preview package additions, upgrades, and diffs without switching
     #[command(name = "dry")]
@@ -57,42 +70,35 @@ pub enum Commands {
         extra_args: Vec<String>,
     },
 
-    /// Synchronize Antigravity IDE conversation history to state.vscdb
-    #[command(name = "sync-chats", alias = "sync")]
-    SyncChats,
+    /// Pull incoming changes from remote git config repository
+    #[command(name = "sync")]
+    Sync,
 
-    /// SSH secret management (backup and restore)
-    #[command(name = "ssh")]
-    Ssh {
+    /// Secrets management (store/restore)
+    #[command(name = "secrets")]
+    Secrets {
         #[command(subcommand)]
-        cmd: SshCommands,
+        cmd: SecretsCommands,
     },
 
-    /// Decrypt secrets/ssh.tar.age into ~/.ssh (interactive passphrase)
-    #[command(name = "restore-ssh")]
-    RestoreSsh {
-        /// Path to encrypted archive (defaults to secrets/ssh.tar.age)
-        archive: Option<PathBuf>,
-    },
-
-    /// Encrypt ~/.ssh into secrets/ssh.tar.age with an age passphrase
-    #[command(name = "backup-ssh")]
-    BackupSsh {
-        /// Path to destination archive (defaults to secrets/ssh.tar.age)
-        archive: Option<PathBuf>,
+    /// Install OrbitOS configuration from repository or path
+    #[command(name = "install")]
+    Install {
+        #[arg(long = "config")]
+        config: Option<String>,
     },
 }
 
 #[derive(Args, Debug, Clone)]
 pub struct CommonRebuildArgs {
-    /// Target host (defaults to current machine hostname)
+    /// Target host configuration
     pub host: Option<String>,
 
     /// Update flake inputs before building
     #[arg(short = 'u', long = "update")]
     pub update: bool,
 
-    /// Preview package diffs without switching
+    /// Preview package diffs without switching (dry run)
     #[arg(short = 'd', long = "dry")]
     pub dry: bool,
 
@@ -123,21 +129,26 @@ pub struct CommonRebuildArgs {
 
 #[derive(Args, Debug, Clone)]
 pub struct RebuildArgs {
-    /// Action: switch, test, boot, build, dry, clean
-    pub action: Option<String>,
-
-    /// Target host or options
+    /// Target host configuration
     pub host: Option<String>,
 
-    /// Update flake inputs before building
+    /// Update flake inputs before building (-u)
     #[arg(short = 'u', long = "update")]
     pub update: bool,
 
-    /// Preview package diffs without switching
+    /// Preview package diffs without switching (dry run) (-d)
     #[arg(short = 'd', long = "dry")]
     pub dry: bool,
 
-    /// Prompt for confirmation before switching
+    /// Test build without adding to bootloader (-t)
+    #[arg(short = 't', long = "test")]
+    pub test: bool,
+
+    /// Build into VM and launch (-v)
+    #[arg(short = 'v', long = "vm")]
+    pub vm: bool,
+
+    /// Prompt for confirmation before switching (-a)
     #[arg(short = 'a', long = "ask")]
     pub ask: bool,
 
@@ -157,30 +168,40 @@ pub struct RebuildArgs {
     #[arg(long = "no-hypr-reload")]
     pub no_hypr_reload: bool,
 
-    /// Extra arguments passed to nh
+    /// Extra arguments passed to nh / nixos-rebuild
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub extra_args: Vec<String>,
 }
 
-#[derive(Subcommand, Debug)]
-pub enum SshCommands {
-    /// Encrypt ~/.ssh into secrets/ssh.tar.age with an age passphrase
-    #[command(name = "backup")]
-    Backup {
-        /// Destination archive path (defaults to secrets/ssh.tar.age)
-        archive: Option<PathBuf>,
-    },
+#[derive(Subcommand, Debug, Clone)]
+pub enum SecretsCommands {
+    /// Store secrets into an encrypted archive
+    Store {
+        /// Secret type: ssh (default), wifi, or all
+        #[arg(long = "ssh", default_missing_value = "ssh", num_args = 0..=1)]
+        secret_type: Option<String>,
 
-    /// Decrypt secrets/ssh.tar.age into ~/.ssh (interactive passphrase)
-    #[command(name = "restore")]
+        /// Encryption method: pass (passphrase) or ssh (SSH public key)
+        #[arg(long = "encryption", default_value = "pass")]
+        encryption: Option<String>,
+    },
+    /// Restore secrets from an encrypted archive
     Restore {
-        /// Source archive path (defaults to secrets/ssh.tar.age)
+        /// Secret type: ssh (default), wifi, or all
+        #[arg(long = "ssh", default_missing_value = "ssh", num_args = 0..=1)]
+        secret_type: Option<String>,
+
+        /// Encryption method: pass or ssh
+        #[arg(long = "encryption", default_value = "pass")]
+        encryption: Option<String>,
+
+        /// Optional path to the archive
+        #[arg(short = 'a', long = "archive")]
         archive: Option<PathBuf>,
     },
 }
 
-/// Flexible argument parser supporting the legacy rebuild script syntax:
-/// Usage: rebuild [ACTION] [HOST] [update|--update|-u] [OPTIONS...]
+/// Flexible argument parser supporting legacy rebuild syntax:
 pub fn parse_flexible_rebuild_args(args: &[String], flake_dir: Option<PathBuf>) -> RebuildOptions {
     let mut action = RebuildAction::Switch;
     let mut host: Option<String> = None;
@@ -198,9 +219,9 @@ pub fn parse_flexible_rebuild_args(args: &[String], flake_dir: Option<PathBuf>) 
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "switch" => action = RebuildAction::Switch,
-            "test" => action = RebuildAction::Test,
-            "boot" => action = RebuildAction::Boot,
-            "build" => action = RebuildAction::Build,
+            "test" | "-t" => action = RebuildAction::Test,
+            "build" | "build-only" => action = RebuildAction::Build,
+            "vm" | "-v" => action = RebuildAction::Vm,
             "dry" | "--dry" | "-d" => dry = true,
             "clean" => action = RebuildAction::Clean,
             "update" | "--update" | "-u" => update = true,
