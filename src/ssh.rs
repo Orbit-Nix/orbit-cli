@@ -1,7 +1,6 @@
 // OrbitOS — SSH key archiving, restoration, and permission handlers
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use anyhow::{Context, Result};

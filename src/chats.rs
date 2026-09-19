@@ -13,7 +13,7 @@ use crate::proto::{
     encode_field_bytes, encode_field_varint, make_timestamp, make_ws_info, parse_proto,
     ProtoFieldsExt,
 };
-use crate::util::{get_target_user, print_success, print_warn};
+use crate::util::{get_target_user, print_success};
 
 // Synchronize all local conversation history into Antigravity IDE SQLite state DB
 pub fn sync_chats(custom_home: Option<&Path>) -> Result<usize> {
@@ -75,9 +75,9 @@ pub fn sync_chats(custom_home: Option<&Path>) -> Result<usize> {
         let mut uri = "file:///etc/nixos".to_string();
 
         if let Ok(conn) = Connection::open_with_flags(db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
-            let mut stmt = conn.prepare("SELECT data FROM trajectory_metadata_blob WHERE id=\"main\"");
+            let stmt = conn.prepare("SELECT data FROM trajectory_metadata_blob WHERE id=\"main\"");
             if let Ok(mut stmt) = stmt {
-                let mut rows = stmt.query([]);
+                let rows = stmt.query([]);
                 if let Ok(mut rows) = rows {
                     if let Ok(Some(row)) = rows.next() {
                         if let Ok(blob) = row.get::<_, Vec<u8>>(0) {
