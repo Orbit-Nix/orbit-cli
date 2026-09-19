@@ -1,9 +1,12 @@
+// OrbitOS — Fresh system installer and repository bootstrapper
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use anyhow::{bail, Context, Result};
-use crate::util::{get_target_user, print_banner, print_err, run_interactive};
+use crate::util::{get_target_user, print_step, print_success, run_interactive};
 
+// Bootstrap OrbitOS configuration from a repository or existing local directory
 pub fn install_orbit(custom_config: Option<&str>) -> Result<()> {
     let user_info = get_target_user();
     let home = &user_info.home_dir;
@@ -19,7 +22,7 @@ pub fn install_orbit(custom_config: Option<&str>) -> Result<()> {
             } else {
                 target_orbitos.to_path_buf()
             };
-            print_banner(&format!("Cloning config from {} into {}...", cfg, clone_dest.display()));
+            print_step(&format!("Cloning config from {} into {}...", cfg, clone_dest.display()));
             let mut clone_cmd = Command::new("git");
             clone_cmd.arg("clone").arg(cfg).arg(&clone_dest);
             run_interactive(&mut clone_cmd)?;
@@ -32,7 +35,7 @@ pub fn install_orbit(custom_config: Option<&str>) -> Result<()> {
             final_config_dir = src_path.to_path_buf();
         }
     } else {
-        // Check current directory
+        // Check current working directory
         let cwd = std::env::current_dir().context("Failed to get current dir")?;
         let dir_name = cwd.file_name().and_then(|s| s.to_str()).unwrap_or("");
 
@@ -41,13 +44,13 @@ pub fn install_orbit(custom_config: Option<&str>) -> Result<()> {
             || dir_name == "orbit-config"
             || dir_name == "NixOS"
         {
-            print_banner(&format!(
+            print_step(&format!(
                 "Using existing NixOS/Orbit configuration in {}",
                 cwd.display()
             ));
             final_config_dir = cwd;
         } else {
-            // Clone default repo
+            // Clone default repository
             let default_repo = "https://github.com/m-uvex/NixOS.git";
             let clone_dest = if target_orbitos.exists() {
                 fallback_orbitos.clone()
@@ -55,7 +58,7 @@ pub fn install_orbit(custom_config: Option<&str>) -> Result<()> {
                 target_orbitos.to_path_buf()
             };
 
-            print_banner(&format!(
+            print_step(&format!(
                 "Cloning default OrbitOS configuration into {}...",
                 clone_dest.display()
             ));
@@ -70,7 +73,7 @@ pub fn install_orbit(custom_config: Option<&str>) -> Result<()> {
         }
     }
 
-    print_banner(&format!(
+    print_step(&format!(
         "Configuration prepared at {}. Triggering orbit rebuild -u...",
         final_config_dir.display()
     ));
@@ -83,9 +86,9 @@ pub fn install_orbit(custom_config: Option<&str>) -> Result<()> {
         .arg("-f")
         .arg(&final_config_dir);
 
-    // Fallback if orbit executable is not yet in path
+    // Fallback if orbit executable is not yet in PATH
     if run_interactive(&mut rebuild_cmd).is_err() {
-        print_banner("Running nixos-rebuild switch --flake directly...");
+        print_step("Running nixos-rebuild switch --flake directly...");
         let mut fallback = Command::new("sudo");
         fallback
             .arg("nixos-rebuild")
@@ -95,6 +98,6 @@ pub fn install_orbit(custom_config: Option<&str>) -> Result<()> {
         run_interactive(&mut fallback)?;
     }
 
-    print_banner("OrbitOS installation and rebuild complete!");
+    print_success("OrbitOS installation and rebuild complete!");
     Ok(())
 }

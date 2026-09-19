@@ -1,14 +1,20 @@
+// OrbitOS — Command-line interface definitions and arguments parser
+
 use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use crate::rebuild::{RebuildAction, RebuildOptions};
+
+//=========================================#
+//               ORBIT CLI                 #
+//=========================================#
 
 #[derive(Parser, Debug)]
 #[command(
     name = "orbit",
     version,
     about = "Unified system rebuilder, sync, package runner, and secret management tool for OrbitOS / NixOS",
-    long_about = "Orbit CLI: A fast, modular system management and rebuilder tool for NixOS.\n\
-                  Supports visual diffs, interactive package running (yay-style), flake updates, git synchronization, VM testing, and encrypted secrets."
+    long_about = "Orbit CLI: Fast, modular system management and rebuilder tool for NixOS.\n\
+                  Supports visual diffs, interactive package running (yay-style), flake updates, git synchronization, VM testing, modular desktop shells, and encrypted secrets."
 )]
 pub struct OrbitCli {
     #[command(subcommand)]
@@ -18,6 +24,10 @@ pub struct OrbitCli {
     #[arg(short = 'f', long = "flake", global = true)]
     pub flake: Option<PathBuf>,
 }
+
+//=========================================#
+//              SUBCOMMANDS                #
+//=========================================#
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
@@ -37,6 +47,13 @@ pub enum Commands {
     RunGui {
         /// Package name or search query
         query: String,
+    },
+
+    /// Switch, list, or inspect OrbitOS modular desktop shells (end4-pC, midnight, dms)
+    #[command(name = "shell")]
+    Shell {
+        /// Target shell name (end4-pC, midnight, dms, none) or action (list, status, restart, autostart)
+        shell: Option<String>,
     },
 
     /// Update flake inputs without rebuilding
@@ -88,6 +105,10 @@ pub enum Commands {
         config: Option<String>,
     },
 }
+
+//=========================================#
+//            ARGUMENT STRUCTS             #
+//=========================================#
 
 #[derive(Args, Debug, Clone)]
 pub struct CommonRebuildArgs {
@@ -201,7 +222,11 @@ pub enum SecretsCommands {
     },
 }
 
-/// Flexible argument parser supporting legacy rebuild syntax:
+//=========================================#
+//        FLEXIBLE ARGUMENT PARSER         #
+//=========================================#
+
+// Flexible argument parser supporting legacy rebuild syntax (e.g. "orbit switch", "orbit update")
 pub fn parse_flexible_rebuild_args(args: &[String], flake_dir: Option<PathBuf>) -> RebuildOptions {
     let mut action = RebuildAction::Switch;
     let mut host: Option<String> = None;

@@ -1,4 +1,10 @@
+// OrbitOS — Minimalist Protobuf (proto3) wire parser and encoder
+
 use std::collections::HashMap;
+
+//=========================================#
+//            PROTO TYPES & VALUES         #
+//=========================================#
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum WireValue {
@@ -10,6 +16,7 @@ pub enum WireValue {
 
 pub type ProtoFields = HashMap<u32, Vec<WireValue>>;
 
+// Parse raw protobuf binary into tag map
 pub fn parse_proto(b: &[u8]) -> ProtoFields {
     let mut fields: ProtoFields = HashMap::new();
     let mut i = 0;
@@ -61,7 +68,7 @@ pub fn parse_proto(b: &[u8]) -> ProtoFields {
                 fields.entry(tag).or_default().push(WireValue::Varint(val));
             }
             2 => {
-                // Length-delimited (bytes/string/submessage)
+                // Length-delimited (bytes / string / submessage)
                 let mut len = 0usize;
                 let mut shift = 0u32;
                 loop {
@@ -87,7 +94,7 @@ pub fn parse_proto(b: &[u8]) -> ProtoFields {
                 fields.entry(tag).or_default().push(WireValue::Bytes(sub));
             }
             1 => {
-                // 64-bit
+                // 64-bit fixed
                 if i + 8 > b.len() {
                     return fields;
                 }
@@ -97,7 +104,7 @@ pub fn parse_proto(b: &[u8]) -> ProtoFields {
                 fields.entry(tag).or_default().push(WireValue::Fixed64(arr));
             }
             5 => {
-                // 32-bit
+                // 32-bit fixed
                 if i + 4 > b.len() {
                     return fields;
                 }
@@ -115,6 +122,10 @@ pub fn parse_proto(b: &[u8]) -> ProtoFields {
 
     fields
 }
+
+//=========================================#
+//            ENCODING HELPERS             #
+//=========================================#
 
 pub fn encode_varint(mut val: u64) -> Vec<u8> {
     let mut res = Vec::new();

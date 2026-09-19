@@ -1,3 +1,5 @@
+// OrbitOS — Unified system rebuilder, sync, package runner, and secret management CLI
+
 mod chats;
 mod cli;
 mod distro;
@@ -6,6 +8,7 @@ mod proto;
 mod rebuild;
 mod run;
 mod secrets;
+mod shell;
 mod ssh;
 mod sync;
 mod update;
@@ -13,24 +16,26 @@ mod util;
 
 use clap::Parser;
 use cli::{Commands, OrbitCli};
-use colored::Colorize;
 use distro::ensure_nixos;
 use rebuild::{execute_rebuild, RebuildOptions};
+use util::print_err;
 
 fn main() -> anyhow::Result<()> {
-    // Check if running on NixOS before doing anything
+    // --- DISTRO COMPATIBILITY CHECK ---
     if let Err(e) = ensure_nixos() {
-        eprintln!("{} {}", "error:".bold().red(), e);
+        print_err(&format!("{}", e));
         std::process::exit(1);
     }
 
     let args: Vec<String> = std::env::args().collect();
 
-    // Check if invoked with legacy argument style (e.g., "orbit switch", "orbit update", etc.)
-    // or standard clap CLI subcommand style
+    // Support legacy rebuild argument style (e.g., "orbit switch", "orbit update", etc.)
     if args.len() > 1 {
         let first_arg = args[1].as_str();
-        // If it starts with '-' or matches a known legacy action
+        if first_arg == "shell" {
+            let shell_arg = args.get(2).cloned();
+            return shell::handle_shell_command(shell_arg);
+        }
         let known_actions = ["switch", "test", "boot", "build", "build-only", "dry", "clean"];
         if known_actions.contains(&first_arg) {
             let opts = cli::parse_flexible_rebuild_args(&args[1..], None);
@@ -38,6 +43,7 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
+    // --- CLI COMMAND DISPATCH ---
     let cli = OrbitCli::parse();
 
     match cli.command {
@@ -65,6 +71,9 @@ fn main() -> anyhow::Result<()> {
             }
 
             execute_rebuild(opts)?;
+        }
+        Some(Commands::Shell { shell }) => {
+            shell::handle_shell_command(shell)?;
         }
         Some(Commands::Run { query }) => {
             run::handle_run(&query, false)?;
@@ -165,7 +174,7 @@ fn main() -> anyhow::Result<()> {
             install::install_orbit(config.as_deref())?;
         }
         None => {
-            // Default behavior: orbit with no arguments runs rebuild switch
+            // Default action: rebuild switch on current host
             let opts = RebuildOptions {
                 action: rebuild::RebuildAction::Switch,
                 host: None,

@@ -1,10 +1,16 @@
+// OrbitOS — Git configuration repository synchronization and conflict handler
+
 use std::io::{self, Write};
 use std::path::Path;
 use std::process::Command;
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
-use crate::util::{detect_flake_dir, print_banner, print_err, print_warn, run_interactive};
+use crate::util::{
+    detect_flake_dir, print_err, print_info, print_step, print_success, print_sync, print_warn,
+    run_interactive,
+};
 
+// Synchronize the configuration git repository with remote origin
 pub fn sync_config(explicit_flake: Option<&Path>) -> Result<()> {
     let config_dir = detect_flake_dir(explicit_flake)?;
 
@@ -16,7 +22,7 @@ pub fn sync_config(explicit_flake: Option<&Path>) -> Result<()> {
         bail!("Git repository not found in config directory");
     }
 
-    print_banner(&format!(
+    print_sync(&format!(
         "Syncing configuration repository at {}...",
         config_dir.display()
     ));
@@ -39,11 +45,11 @@ pub fn sync_config(explicit_flake: Option<&Path>) -> Result<()> {
             String::from_utf8_lossy(&status_output.stdout).trim()
         );
         println!();
-        println!("How would you like to proceed?");
+        print_info("How would you like to proceed?");
         println!("  1) {}", "Abort sync (preserve local changes unchanged)".bold());
         println!("  2) {}", "Overwrite local changes (reset --hard origin/HEAD)".red().bold());
         println!("  3) {}", "Overwrite remote changes (commit and force push)".yellow().bold());
-        print!("Select an option [1/2/3] (default 1): ");
+        print!("{}{} {} ", "[🗣? 🚀]".bold(), "⤷".bold(), "Select an option [1/2/3] (default 1):".bold());
         let _ = io::stdout().flush();
 
         let mut input = String::new();
@@ -52,7 +58,7 @@ pub fn sync_config(explicit_flake: Option<&Path>) -> Result<()> {
 
         match choice {
             "2" => {
-                print_banner("Overwriting local changes with remote...");
+                print_step("Overwriting local changes with remote...");
                 let mut fetch_cmd = Command::new("git");
                 fetch_cmd.arg("-C").arg(&config_dir).arg("fetch");
                 run_interactive(&mut fetch_cmd)?;
@@ -65,11 +71,11 @@ pub fn sync_config(explicit_flake: Option<&Path>) -> Result<()> {
                     .arg("--hard")
                     .arg("@{u}");
                 run_interactive(&mut reset_cmd)?;
-                print_banner("Local changes overwritten successfully.");
+                print_success("Local changes overwritten successfully.");
                 return Ok(());
             }
             "3" => {
-                print_banner("Committing and pushing local changes to remote...");
+                print_step("Committing and pushing local changes to remote...");
                 let mut add_cmd = Command::new("git");
                 add_cmd.arg("-C").arg(&config_dir).arg("add").arg("-A");
                 run_interactive(&mut add_cmd)?;
@@ -90,21 +96,21 @@ pub fn sync_config(explicit_flake: Option<&Path>) -> Result<()> {
                     .arg("push")
                     .arg("--force-with-lease");
                 run_interactive(&mut push_cmd)?;
-                print_banner("Remote repository updated successfully.");
+                print_success("Remote repository updated successfully.");
                 return Ok(());
             }
             _ => {
-                print_banner("Sync aborted. Local changes were not modified.");
+                print_info("Sync aborted. Local changes were not modified.");
                 return Ok(());
             }
         }
     }
 
-    // If clean, do a safe git pull
-    print_banner("Pulling incoming changes from remote...");
+    // Safe git pull if working tree is clean
+    print_step("Pulling incoming changes from remote...");
     let mut pull_cmd = Command::new("git");
     pull_cmd.arg("-C").arg(&config_dir).arg("pull");
     run_interactive(&mut pull_cmd).context("Failed to git pull incoming changes")?;
-    print_banner("Configuration synced successfully.");
+    print_success("Configuration synced successfully.");
     Ok(())
 }

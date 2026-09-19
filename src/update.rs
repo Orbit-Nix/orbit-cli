@@ -1,13 +1,16 @@
+// OrbitOS — Flake inputs updater
+
 use std::path::Path;
 use std::process::Command;
 use anyhow::{Context, Result};
-use crate::util::{detect_flake_dir, get_target_user, print_banner, run_interactive};
+use crate::util::{detect_flake_dir, get_target_user, print_step, print_success, run_interactive};
 
+// Update flake inputs (nix flake update) for the active configuration
 pub fn update_flake(explicit_flake: Option<&Path>) -> Result<()> {
     let flake_dir = detect_flake_dir(explicit_flake)?;
     let user_info = get_target_user();
 
-    print_banner(&format!(
+    print_step(&format!(
         "Updating flake inputs in {}...",
         flake_dir.display()
     ));
@@ -30,6 +33,6 @@ pub fn update_flake(explicit_flake: Option<&Path>) -> Result<()> {
     };
 
     run_interactive(&mut cmd).context("Failed to update flake inputs")?;
-    print_banner("Flake inputs updated successfully.");
+    print_success("Flake inputs updated successfully.");
     Ok(())
 }

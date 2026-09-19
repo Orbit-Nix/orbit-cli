@@ -1,3 +1,5 @@
+// OrbitOS — Antigravity IDE conversation history synchronizer and state.vscdb manager
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -11,8 +13,9 @@ use crate::proto::{
     encode_field_bytes, encode_field_varint, make_timestamp, make_ws_info, parse_proto,
     ProtoFieldsExt,
 };
-use crate::util::{get_target_user, print_banner, print_warn};
+use crate::util::{get_target_user, print_success, print_warn};
 
+// Synchronize all local conversation history into Antigravity IDE SQLite state DB
 pub fn sync_chats(custom_home: Option<&Path>) -> Result<usize> {
     let user_info = get_target_user();
     let home_dir = custom_home
@@ -29,7 +32,7 @@ pub fn sync_chats(custom_home: Option<&Path>) -> Result<usize> {
         return Ok(0);
     }
 
-    // Try backup
+    // Create database backup
     let _ = fs::copy(&db_path, &backup_path);
 
     let mut dbs: Vec<PathBuf> = Vec::new();
@@ -42,7 +45,7 @@ pub fn sync_chats(custom_home: Option<&Path>) -> Result<usize> {
         }
     }
 
-    // Sort by mtime descending
+    // Sort conversations by modified time descending
     dbs.sort_by(|a, b| {
         let ma = a.metadata().and_then(|m| m.modified()).unwrap_or(UNIX_EPOCH);
         let mb = b.metadata().and_then(|m| m.modified()).unwrap_or(UNIX_EPOCH);
@@ -193,7 +196,7 @@ pub fn sync_chats(custom_home: Option<&Path>) -> Result<usize> {
     )?;
     let _ = conn.execute_batch("PRAGMA wal_checkpoint(FULL);");
 
-    print_banner(&format!(
+    print_success(&format!(
         "Antigravity IDE: Synced {} conversation histories to state.vscdb",
         count
     ));

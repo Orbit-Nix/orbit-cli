@@ -1,3 +1,5 @@
+// OrbitOS — System rebuilder, VM runner, generation switcher, and post-build hooks
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -7,8 +9,13 @@ use colored::Colorize;
 use crate::ssh::{default_ssh_archive, has_ssh_keys, restore_ssh};
 use crate::util::{
     clean_stale_home_manager_backups, detect_flake_dir, get_hostname, get_target_user,
-    print_banner, print_err, print_warn, prompt_confirm, run_interactive,
+    print_err, print_info, print_step, print_success, print_sync, print_warn, prompt_confirm,
+    run_interactive,
 };
+
+//=========================================#
+//            REBUILD ACTIONS              #
+//=========================================#
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RebuildAction {
@@ -45,6 +52,7 @@ impl RebuildAction {
     }
 }
 
+// Rebuild options bundle
 #[derive(Debug, Clone)]
 pub struct RebuildOptions {
     pub action: RebuildAction,
@@ -78,12 +86,17 @@ impl Default for RebuildOptions {
     }
 }
 
+//=========================================#
+//            REBUILD EXECUTION            #
+//=========================================#
+
+// Execute rebuild pipeline according to parsed options
 pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
     let user_info = get_target_user();
 
-    // Clean action
+    // Clean action (nh clean all)
     if opts.action.is_clean() {
-        print_banner("Running nh clean all...");
+        print_step("Running nh clean all...");
         let mut cmd = Command::new("nh");
         cmd.arg("clean").arg("all");
         if opts.dry {
@@ -103,7 +116,7 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
 
     // Update flake inputs if requested (-u)
     if opts.update {
-        print_banner(&format!(
+        print_sync(&format!(
             "Updating flake inputs in {}...",
             flake_dir.display()
         ));
@@ -128,7 +141,7 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
 
     // Handle VM build (-v)
     if opts.action.is_vm() {
-        print_banner(&format!(
+        print_step(&format!(
             "Building NixOS VM configuration for host: {}...",
             host.bold()
         ));
@@ -154,10 +167,9 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
         run_interactive(&mut vm_cmd)?;
 
         // Find result symlink
-        let result_link = Path::new("result");
         let result_bin = Path::new("result/bin");
         if result_bin.is_dir() {
-            print_banner(&format!("VM successfully built. Binaries available in {}", result_bin.display()));
+            print_success(&format!("VM successfully built. Binaries available in {}", result_bin.display()));
             // Copy or link vm runner to ~/vmachines/
             if let Ok(entries) = fs::read_dir(result_bin) {
                 for entry in entries.flatten() {
@@ -166,10 +178,10 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
                         let vm_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
                         let target_path = vms_dir.join(format!("{}-runner", vm_name));
                         let _ = fs::copy(&path, &target_path);
-                        print_banner(&format!("VM runner copied to {}", target_path.display()));
+                        print_step(&format!("VM runner copied to {}", target_path.display()));
                         
                         // Launch the VM
-                        print_banner(&format!("Launching VM {}...", vm_name));
+                        print_step(&format!("Launching VM {}...", vm_name));
                         let mut run_cmd = Command::new(&path);
                         run_cmd.current_dir(&vms_dir);
                         let _ = run_interactive(&mut run_cmd);
@@ -177,13 +189,13 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
                 }
             }
         } else {
-            print_banner(&format!("VM files stored in {}", vms_dir.display()));
+            print_step(&format!("VM files stored in {}", vms_dir.display()));
         }
 
         return Ok(());
     }
 
-    // Clean up stale Home Manager backup files
+    // Clean up stale Home Manager .backup files that could block generation activation
     clean_stale_home_manager_backups(&user_info.home_dir);
 
     // Build nh command
@@ -194,7 +206,7 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
         action_str
     };
 
-    print_banner(&format!(
+    print_step(&format!(
         "Building and applying configuration ({}) for: {}...",
         display_action,
         host.bold()
@@ -225,15 +237,15 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
     // Post-build hooks on switch or test
     let is_switch_or_test = matches!(opts.action, RebuildAction::Switch | RebuildAction::Test);
     if is_switch_or_test && !opts.dry && !opts.action.is_dry() {
-        // 1. Interactive SSH key restoration check
+        // Prompt for interactive SSH key restoration if missing on switch/test
         if !opts.no_ssh_prompt {
             let secrets_archive = default_ssh_archive(Some(&flake_dir));
             let ssh_dir = user_info.home_dir.join(".ssh");
             if secrets_archive.is_file() && !has_ssh_keys(&ssh_dir) {
                 println!();
-                print_banner(&format!("No SSH keys detected in {}", ssh_dir.display()));
-                print_banner(&format!("Found encrypted backup: {}", secrets_archive.display()));
-                if prompt_confirm("==> Would you like to restore ~/.ssh now?", true) {
+                print_info(&format!("No SSH keys detected in {}", ssh_dir.display()));
+                print_success(&format!("Found encrypted backup: {}", secrets_archive.display()));
+                if prompt_confirm("Would you like to restore ~/.ssh now?", true) {
                     if let Err(e) = restore_ssh(Some(&secrets_archive), Some(&user_info.home_dir)) {
                         print_warn(&format!("SSH restore failed: {}", e));
                     }
@@ -241,7 +253,7 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
             }
         }
 
-        // 2. Reload Hyprland if running
+        // Reload Hyprland configuration if running
         if !opts.no_hypr_reload {
             reload_hyprland_if_running(&user_info.username, user_info.uid);
         }
@@ -250,6 +262,7 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
     Ok(())
 }
 
+// Reload Hyprland configuration on the active display server
 fn reload_hyprland_if_running(target_user: &str, target_uid: u32) {
     let hyprland_running = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").is_ok()
         || Command::new("pgrep")
@@ -260,7 +273,7 @@ fn reload_hyprland_if_running(target_user: &str, target_uid: u32) {
             .unwrap_or(false);
 
     if hyprland_running {
-        print_banner("Reloading Hyprland configuration...");
+        print_sync("Reloading Hyprland configuration...");
         let is_sudo = std::env::var("SUDO_USER").map(|u| u != "root").unwrap_or(false);
 
         let success = if is_sudo {
@@ -282,7 +295,7 @@ fn reload_hyprland_if_running(target_user: &str, target_uid: u32) {
         };
 
         if success {
-            print_banner("Hyprland reloaded.");
+            print_success("Hyprland reloaded.");
         } else {
             print_warn("Could not reload Hyprland automatically.");
         }

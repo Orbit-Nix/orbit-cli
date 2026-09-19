@@ -1,3 +1,5 @@
+// OrbitOS — Encrypted secrets management (age/tar archive store and restore)
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -6,8 +8,11 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use crate::cli::SecretsCommands;
 use crate::ssh::{default_ssh_archive, has_ssh_keys};
-use crate::util::{get_target_user, print_banner, print_err, set_permissions};
+use crate::util::{
+    get_target_user, print_err, print_info, print_step, print_success, print_sync, set_permissions,
+};
 
+// Dispatch secret subcommands (store / restore)
 pub fn handle_secrets_command(cmd: SecretsCommands, explicit_flake: Option<&Path>) -> Result<()> {
     match cmd {
         SecretsCommands::Store { secret_type, encryption } => {
@@ -24,6 +29,7 @@ pub fn handle_secrets_command(cmd: SecretsCommands, explicit_flake: Option<&Path
     Ok(())
 }
 
+// Encrypt and archive user secrets into age file
 pub fn store_secret(secret_type: &str, encryption: &str, explicit_flake: Option<&Path>) -> Result<()> {
     let user_info = get_target_user();
     let home_dir = &user_info.home_dir;
@@ -34,7 +40,7 @@ pub fn store_secret(secret_type: &str, encryption: &str, explicit_flake: Option<
             let ssh_dir = home_dir.join(".ssh");
 
             if !ssh_dir.is_dir() {
-                print_err(&format!("SSH directory {} does not exist.", ssh_dir.display()));
+                print_err(&format!("directory {} does not exist.", ssh_dir.display()));
                 bail!("SSH directory does not exist");
             }
 
@@ -43,11 +49,12 @@ pub fn store_secret(secret_type: &str, encryption: &str, explicit_flake: Option<
                     .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
             }
 
-            print_banner(&format!(
-                "Storing SSH secret archive ({}) to {}...",
-                encryption,
+            print_step(&format!(
+                "Backing up {} to {}...",
+                ssh_dir.display(),
                 archive.display()
             ));
+            print_info("You will be prompted to set an age passphrase:");
 
             let mut tar_cmd = Command::new("tar")
                 .arg("-cz")
@@ -64,12 +71,12 @@ pub fn store_secret(secret_type: &str, encryption: &str, explicit_flake: Option<
 
             let mut age_cmd = Command::new("age");
             if encryption == "ssh" {
-                // Find SSH public keys or identity to encrypt with
+                // Check if id_ed25519.pub exists for public key encryption
                 let pub_key_path = ssh_dir.join("id_ed25519.pub");
                 if pub_key_path.exists() {
                     age_cmd.arg("-R").arg(&pub_key_path);
                 } else {
-                    print_banner("No default id_ed25519.pub found, falling back to passphrase...");
+                    print_info("No default id_ed25519.pub found, falling back to passphrase...");
                     age_cmd.arg("-p");
                 }
             } else {
@@ -88,24 +95,25 @@ pub fn store_secret(secret_type: &str, encryption: &str, explicit_flake: Option<
             let tar_status = tar_cmd.wait().context("Failed waiting for tar")?;
 
             if !age_status.success() || !tar_status.success() {
-                print_err("Failed to encrypt or store SSH secrets.");
+                print_err("failed to encrypt or store SSH secrets.");
                 bail!("Secrets store failed");
             }
 
             let _ = set_permissions(&archive, 0o644);
-            print_banner(&format!("SSH secrets successfully stored at {}", archive.display()));
+            print_success(&format!("Encrypted SSH archive saved to {}", archive.display()));
         }
         "wifi" => {
-            print_banner("WiFi secrets support will be available soon.");
+            print_info("WiFi secrets support will be available soon.");
         }
         other => {
-            print_err(&format!("Unknown secret type '{}'. Available: ssh, wifi", other));
+            print_err(&format!("unknown secret type '{}'. Available: ssh, wifi", other));
             bail!("Unknown secret type");
         }
     }
     Ok(())
 }
 
+// Decrypt and restore secrets from age archive
 pub fn restore_secret(
     secret_type: &str,
     _encryption: &str,
@@ -123,13 +131,13 @@ pub fn restore_secret(
                 .unwrap_or_else(|| default_ssh_archive(explicit_flake));
 
             if !archive.is_file() {
-                print_err(&format!("Encrypted SSH archive not found at: {}", archive.display()));
+                print_err(&format!("encrypted SSH archive not found at: {}", archive.display()));
                 bail!("SSH archive does not exist");
             }
 
             let ssh_dir = home_dir.join(".ssh");
-            print_banner(&format!(
-                "Restoring SSH secrets for {} into {} from {}...",
+            print_sync(&format!(
+                "Restoring SSH keys for {} into {} from {}...",
                 target_user.bold(),
                 ssh_dir.display(),
                 archive.display()
@@ -162,7 +170,7 @@ pub fn restore_secret(
             let age_status = age_cmd.wait().context("Failed waiting on age")?;
 
             if !age_status.success() || !tar_status.success() {
-                print_err("Decryption failed or incorrect passphrase/key.");
+                print_err("decryption failed or incorrect passphrase.");
                 bail!("Secrets restore failed");
             }
 
@@ -184,13 +192,13 @@ pub fn restore_secret(
                 }
             }
 
-            print_banner(&format!("SSH secrets successfully restored to {}/", ssh_dir.display()));
+            print_success(&format!("SSH keys successfully restored to {}/", ssh_dir.display()));
         }
         "wifi" => {
-            print_banner("WiFi secrets support will be available soon.");
+            print_info("WiFi secrets support will be available soon.");
         }
         other => {
-            print_err(&format!("Unknown secret type '{}'. Available: ssh, wifi", other));
+            print_err(&format!("unknown secret type '{}'. Available: ssh, wifi", other));
             bail!("Unknown secret type");
         }
     }

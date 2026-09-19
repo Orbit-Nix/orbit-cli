@@ -1,9 +1,15 @@
+// OrbitOS — System utility functions, user helpers, and styled terminal logging
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use anyhow::{Context, Result};
 use colored::Colorize;
+
+//=========================================#
+//            USER & HOST INFO             #
+//=========================================#
 
 pub struct UserInfo {
     pub username: String,
@@ -12,6 +18,7 @@ pub struct UserInfo {
     pub home_dir: PathBuf,
 }
 
+// Helper to resolve the active user and home directory (handles sudo/normal execution)
 pub fn get_target_user() -> UserInfo {
     let sudo_user = std::env::var("SUDO_USER").ok().filter(|s| !s.is_empty());
     let user_env = std::env::var("USER").ok().filter(|s| !s.is_empty());
@@ -50,6 +57,7 @@ pub fn get_target_user() -> UserInfo {
     }
 }
 
+// Helper to resolve the system hostname
 pub fn get_hostname() -> String {
     if let Ok(hostname) = fs::read_to_string("/etc/hostname") {
         let trimmed = hostname.trim();
@@ -70,6 +78,11 @@ pub fn get_hostname() -> String {
     std::env::var("HOSTNAME").unwrap_or_else(|_| "nixos".to_string())
 }
 
+//=========================================#
+//          FLAKE & SYSTEM PATHS           #
+//=========================================#
+
+// Automatically detect the root flake directory across standard locations
 pub fn detect_flake_dir(explicit: Option<&Path>) -> Result<PathBuf> {
     if let Some(path) = explicit {
         if path.exists() {
@@ -86,12 +99,12 @@ pub fn detect_flake_dir(explicit: Option<&Path>) -> Result<PathBuf> {
         }
     }
 
-    // Check current directory
+    // Check current working directory
     if let Ok(cwd) = std::env::current_dir() {
         if cwd.join("flake.nix").is_file() {
             return Ok(cwd);
         }
-        // Walk up parents
+        // Walk up directory tree to find flake.nix
         let mut cur = cwd.as_path();
         while let Some(parent) = cur.parent() {
             if parent.join("flake.nix").is_file() {
@@ -101,7 +114,7 @@ pub fn detect_flake_dir(explicit: Option<&Path>) -> Result<PathBuf> {
         }
     }
 
-    // Standard system paths
+    // Standard system locations
     let orbitos_dir = Path::new("/orbitos");
     if orbitos_dir.is_dir() {
         return Ok(orbitos_dir.to_path_buf());
@@ -115,6 +128,7 @@ pub fn detect_flake_dir(explicit: Option<&Path>) -> Result<PathBuf> {
     anyhow::bail!("Could not automatically determine flake directory (checked /orbitos, /etc/nixos, and current directory). Specify via --flake <path>.")
 }
 
+// Clean up stale Home Manager .backup files that could block generation activation
 pub fn clean_stale_home_manager_backups(home: &Path) {
     let patterns = [
         home.join(".config/gtk-3.0/*.backup"),
@@ -134,6 +148,16 @@ pub fn clean_stale_home_manager_backups(home: &Path) {
     }
 }
 
+// Set POSIX file permissions
+pub fn set_permissions(path: &Path, mode: u32) -> Result<()> {
+    let metadata = fs::metadata(path)?;
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(mode);
+    fs::set_permissions(path, permissions)?;
+    Ok(())
+}
+
+// Execute command interactively passing standard I/O streams
 pub fn run_interactive(cmd: &mut Command) -> Result<()> {
     cmd.stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
@@ -153,10 +177,50 @@ pub fn run_interactive(cmd: &mut Command) -> Result<()> {
     Ok(())
 }
 
+//=========================================#
+//          ORBITOS STYLED OUTPUT          #
+//=========================================#
+
+// Progress / Building / Waiting banner: [🗣⏳ 🚀]⤷
+pub fn print_step(msg: &str) {
+    println!("{}{} {}", "[🗣⏳ 🚀]".bold(), "⤷".bold(), msg.bold());
+}
+
+// Refresh / Updating / Syncing banner: [🗣↻ 🚀]⤷
+pub fn print_sync(msg: &str) {
+    println!("{}{} {}", "[🗣↻ 🚀]".bold(), "⤷".bold(), msg.bold());
+}
+
+// Success banner: [🗣✓ 🚀]⤷
+pub fn print_success(msg: &str) {
+    println!("{}{} {}", "[🗣✓ 🚀]".bold(), "⤷".bold(), msg.bold());
+}
+
+// Info / Notice banner: [🗣⟲ 🚀]⤷
+pub fn print_info(msg: &str) {
+    println!("{}{} {}", "[🗣⟲ 🚀]".bold(), "⤷".bold(), msg);
+}
+
+// General step banner alias
+pub fn print_banner(msg: &str) {
+    print_step(msg);
+}
+
+// Warning banner: [🗣! 🚀]⤷ warning:
+pub fn print_warn(msg: &str) {
+    eprintln!("{}{} {}", "[🗣! 🚀]".yellow().bold(), "⤷".yellow(), msg);
+}
+
+// Error banner: [🗣X 🚀]⤷ error:
+pub fn print_err(msg: &str) {
+    eprintln!("{}{} {}", "[🗣X 🚀]".red().bold(), "⤷".red(), msg);
+}
+
+// Interactive confirmation prompt: [🗣? 🚀]⤷
 pub fn prompt_confirm(prompt: &str, default_yes: bool) -> bool {
     use std::io::{self, Write};
     let suffix = if default_yes { "[Y/n]" } else { "[y/N]" };
-    print!("{} {} ", prompt.bold(), suffix);
+    print!("{}{} {} {} ", "[🗣? 🚀]".bold(), "⤷".bold(), prompt.bold(), suffix);
     let _ = io::stdout().flush();
 
     let mut input = String::new();
@@ -170,24 +234,4 @@ pub fn prompt_confirm(prompt: &str, default_yes: bool) -> bool {
     } else {
         trimmed == "y" || trimmed == "yes"
     }
-}
-
-pub fn set_permissions(path: &Path, mode: u32) -> Result<()> {
-    let metadata = fs::metadata(path)?;
-    let mut permissions = metadata.permissions();
-    permissions.set_mode(mode);
-    fs::set_permissions(path, permissions)?;
-    Ok(())
-}
-
-pub fn print_banner(msg: &str) {
-    println!("{} {}", "==>".bold().green(), msg.bold());
-}
-
-pub fn print_warn(msg: &str) {
-    eprintln!("{} {}", "warning:".bold().yellow(), msg);
-}
-
-pub fn print_err(msg: &str) {
-    eprintln!("{} {}", "error:".bold().red(), msg);
 }

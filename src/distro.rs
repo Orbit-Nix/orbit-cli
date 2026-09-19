@@ -1,8 +1,11 @@
+// OrbitOS — Host operating system detection and compatibility guard
+
 use std::fs;
 use anyhow::{bail, Result};
 
+// Ensure that orbit is running on a supported NixOS / OrbitOS system
 pub fn ensure_nixos() -> Result<()> {
-    // Check /etc/os-release
+    // Check /etc/os-release for ID=nixos
     if let Ok(content) = fs::read_to_string("/etc/os-release") {
         for line in content.lines() {
             let line = line.trim();
@@ -12,12 +15,12 @@ pub fn ensure_nixos() -> Result<()> {
         }
     }
 
-    // Secondary check: /etc/NIXOS file
+    // Secondary check: /etc/NIXOS marker
     if std::path::Path::new("/etc/NIXOS").exists() {
         return Ok(());
     }
 
-    // Tertiary check: nixos-version command
+    // Tertiary check: nixos-version executable
     if std::process::Command::new("nixos-version").output().is_ok() {
         return Ok(());
     }
@@ -31,7 +34,6 @@ mod tests {
 
     #[test]
     fn test_ensure_nixos_on_nixos() {
-        // On NixOS environment, this should pass or fail gracefully
         let _ = ensure_nixos();
     }
 }

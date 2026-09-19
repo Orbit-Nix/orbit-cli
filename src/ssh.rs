@@ -1,3 +1,5 @@
+// OrbitOS — SSH key archiving, restoration, and permission handlers
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -5,8 +7,11 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result};
 use colored::Colorize;
 
-use crate::util::{get_target_user, print_banner, print_err, set_permissions};
+use crate::util::{
+    get_target_user, print_err, print_info, print_step, print_success, print_sync, set_permissions,
+};
 
+// Resolve default archive path for encrypted SSH keys
 pub fn default_ssh_archive(flake_dir: Option<&Path>) -> PathBuf {
     if let Some(f) = flake_dir {
         let flake_secret = f.join("secrets/ssh.tar.age");
@@ -32,6 +37,7 @@ pub fn default_ssh_archive(flake_dir: Option<&Path>) -> PathBuf {
     nixos_archive.to_path_buf()
 }
 
+// Check if valid SSH private keys already exist in the user's .ssh directory
 pub fn has_ssh_keys(ssh_dir: &Path) -> bool {
     if !ssh_dir.is_dir() {
         return false;
@@ -55,7 +61,10 @@ pub fn has_ssh_keys(ssh_dir: &Path) -> bool {
                     }
                 }
                 let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-                if !file_name.starts_with("known_hosts") && !file_name.starts_with("config") && !file_name.starts_with("authorized_keys") {
+                if !file_name.starts_with("known_hosts")
+                    && !file_name.starts_with("config")
+                    && !file_name.starts_with("authorized_keys")
+                {
                     return true;
                 }
             }
@@ -65,6 +74,7 @@ pub fn has_ssh_keys(ssh_dir: &Path) -> bool {
     false
 }
 
+// Decrypt and extract SSH archive into ~/.ssh with strict permissions
 pub fn restore_ssh(archive_path: Option<&Path>, custom_home: Option<&Path>) -> Result<()> {
     let user_info = get_target_user();
     let home_dir = custom_home
@@ -83,7 +93,7 @@ pub fn restore_ssh(archive_path: Option<&Path>, custom_home: Option<&Path>) -> R
     }
 
     let ssh_dir = home_dir.join(".ssh");
-    print_banner(&format!(
+    print_sync(&format!(
         "Restoring SSH keys for {} into {} from {}...",
         target_user.bold(),
         ssh_dir.display(),
@@ -123,7 +133,7 @@ pub fn restore_ssh(archive_path: Option<&Path>, custom_home: Option<&Path>) -> R
         anyhow::bail!("SSH restoration failed during decryption or decompression");
     }
 
-    // Fix permissions: chown -R $TARGET_USER:users "$TARGET_HOME/.ssh"
+    // Set user ownership and POSIX permissions (700 for .ssh, 600 for keys, 644 for .pub)
     let _ = Command::new("chown")
         .arg("-R")
         .arg(format!("{}:users", target_user))
@@ -143,19 +153,20 @@ pub fn restore_ssh(archive_path: Option<&Path>, custom_home: Option<&Path>) -> R
         }
     }
 
-    print_banner(&format!(
+    print_success(&format!(
         "SSH keys successfully restored to {}/",
         ssh_dir.display()
     ));
     Ok(())
 }
 
+// Encrypt ~/.ssh directory with age passphrase
 pub fn backup_ssh(archive_path: Option<&Path>, custom_home: Option<&Path>) -> Result<()> {
     let user_info = get_target_user();
     let home_dir = custom_home
         .map(|p| p.to_path_buf())
         .unwrap_or(user_info.home_dir);
-    let target_user = user_info.username;
+    let _target_user = user_info.username;
 
     let archive = match archive_path {
         Some(p) => p.to_path_buf(),
@@ -168,8 +179,8 @@ pub fn backup_ssh(archive_path: Option<&Path>, custom_home: Option<&Path>) -> Re
         anyhow::bail!("SSH directory does not exist");
     }
 
-    print_banner(&format!("Backing up {} to {}...", ssh_dir.display(), archive.display()));
-    print_banner("You will be prompted to set an age passphrase:");
+    print_step(&format!("Backing up {} to {}...", ssh_dir.display(), archive.display()));
+    print_info("You will be prompted to set an age passphrase:");
 
     if let Some(parent) = archive.parent() {
         fs::create_dir_all(parent)
@@ -209,6 +220,6 @@ pub fn backup_ssh(archive_path: Option<&Path>, custom_home: Option<&Path>) -> Re
     }
 
     let _ = set_permissions(&archive, 0o644);
-    print_banner(&format!("Encrypted SSH archive saved to {}", archive.display()));
+    print_success(&format!("Encrypted SSH archive saved to {}", archive.display()));
     Ok(())
 }

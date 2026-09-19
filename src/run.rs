@@ -1,3 +1,5 @@
+// OrbitOS — Interactive yay-style imperative package runner and GUI launcher
+
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::process::Command;
@@ -5,7 +7,11 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use serde::Deserialize;
 
-use crate::util::{print_banner, print_err, print_warn, run_interactive};
+use crate::util::{print_err, print_info, print_step, print_warn, run_interactive};
+
+//=========================================#
+//            PACKAGE SEARCH TYPES         #
+//=========================================#
 
 #[derive(Debug, Deserialize)]
 struct SearchResponse {
@@ -22,7 +28,7 @@ struct SearchResult {
     package_programs: Option<Vec<String>>,
 }
 
-/// Helper to check if a package / program is already in PATH
+// Helper to check if a package or binary is already in PATH
 fn is_installed(pkg_name: &str, main_prog: Option<&str>) -> bool {
     if let Some(prog) = main_prog {
         if Command::new("which").arg(prog).output().map(|o| o.status.success()).unwrap_or(false) {
@@ -32,7 +38,7 @@ fn is_installed(pkg_name: &str, main_prog: Option<&str>) -> bool {
     Command::new("which").arg(pkg_name).output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-/// Queries packages using nh search (or nix search fallback)
+// Query package candidates via nh search or nix search fallback
 fn query_packages(query: &str) -> Result<Vec<SearchResult>> {
     // 1. Try nh search packages <query> --json --limit 20
     let nh_out = Command::new("nh")
@@ -82,7 +88,6 @@ fn query_packages(query: &str) -> Result<Vec<SearchResult>> {
 
     if let Some(obj) = val.as_object() {
         for (key, v) in obj {
-            // key is like "legacyPackages.x86_64-linux.sl" or "packages.x86_64-linux.sl"
             let attr = key.split('.').last().unwrap_or(key).to_string();
             let pname = v.get("pname").and_then(|s| s.as_str()).unwrap_or(&attr).to_string();
             let version = v.get("version").and_then(|s| s.as_str()).map(|s| s.to_string());
@@ -102,7 +107,7 @@ fn query_packages(query: &str) -> Result<Vec<SearchResult>> {
     Ok(results)
 }
 
-/// Parses selection strings like "1", "1 2 3", "1-3, 5"
+// Parse selection inputs such as "1", "1 2 3", "1-3, 5"
 fn parse_selection(input: &str, max_len: usize) -> Vec<usize> {
     let mut selected_indices = HashSet::new();
     let cleaned = input.replace(',', " ");
@@ -130,8 +135,13 @@ fn parse_selection(input: &str, max_len: usize) -> Vec<usize> {
     list
 }
 
+//=========================================#
+//            RUN HANDLER                  #
+//=========================================#
+
+// Interactive search, selection, and launch runner
 pub fn handle_run(query: &str, is_gui: bool) -> Result<()> {
-    print_banner(&format!("Searching for packages matching '{}'...", query.cyan()));
+    print_step(&format!("Searching for packages matching '{}'...", query.cyan()));
 
     let results = query_packages(query)?;
     if results.is_empty() {
@@ -140,7 +150,7 @@ pub fn handle_run(query: &str, is_gui: bool) -> Result<()> {
     }
 
     println!();
-    // Print styled results yay-like in 1..N order
+    // Render styled results yay-style in 1..N order
     for (i, pkg) in results.iter().enumerate() {
         let num = (i + 1).to_string().bold().green();
         let attr_name = pkg.package_attr_name.as_deref().unwrap_or("unknown");
@@ -172,18 +182,23 @@ pub fn handle_run(query: &str, is_gui: bool) -> Result<()> {
         if let Some(desc) = &pkg.package_description {
             let trimmed_desc = desc.trim();
             if !trimmed_desc.is_empty() {
-                println!("    {} {}", "↳".cyan(), trimmed_desc.dimmed());
+                println!("    {} {}", "⤷".cyan(), trimmed_desc.dimmed());
             }
         }
     }
 
     println!();
-    print!("{} ", "==> Enter n° of package(s) to run (e.g. 1 2 3, 1-3, or ^C to abort):".bold().cyan());
+    print!(
+        "{}{} {} ",
+        "[🗣? 🚀]".bold(),
+        "⤷".bold(),
+        "Enter n° of package(s) to run (e.g. 1 2 3, 1-3, or ^C to abort):".bold().cyan()
+    );
     let _ = io::stdout().flush();
 
     let mut input = String::new();
     if io::stdin().read_line(&mut input).is_err() || input.trim().is_empty() {
-        print_banner("No selection made. Aborted.");
+        print_info("No selection made. Aborted.");
         return Ok(());
     }
 
@@ -206,7 +221,7 @@ pub fn handle_run(query: &str, is_gui: bool) -> Result<()> {
     }
 
     let chosen_str = chosen_attrs.join(", ");
-    print_banner(&format!(
+    print_step(&format!(
         "Preparing environment with package(s): {}...",
         chosen_str.bold().green()
     ));
@@ -214,9 +229,8 @@ pub fn handle_run(query: &str, is_gui: bool) -> Result<()> {
     if is_gui {
         // Automatically launch the main application program
         let prog_to_run = first_main_prog.unwrap_or_else(|| chosen_attrs[0].clone());
-        print_banner(&format!("Launching GUI application '{}'...", prog_to_run.bold().green()));
+        print_step(&format!("Launching GUI application '{}'...", prog_to_run.bold().green()));
 
-        // nix-shell -p <pkg1> <pkg2> --run "<prog>"
         let mut shell_cmd = Command::new("nix-shell");
         shell_cmd.arg("-p");
         for attr in &chosen_attrs {
@@ -227,7 +241,7 @@ pub fn handle_run(query: &str, is_gui: bool) -> Result<()> {
         run_interactive(&mut shell_cmd)?;
     } else {
         // Drop user into interactive nix-shell with all selected packages installed
-        print_banner("Entering nix-shell environment (type 'exit' or press Ctrl+D to return)...");
+        print_step("Entering nix-shell environment (type 'exit' or press Ctrl+D to return)...");
 
         let mut shell_cmd = Command::new("nix-shell");
         shell_cmd.arg("-p");
