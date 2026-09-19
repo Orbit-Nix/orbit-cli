@@ -9,7 +9,7 @@ use colored::Colorize;
 use crate::ssh::{default_ssh_archive, has_ssh_keys, restore_ssh};
 use crate::util::{
     clean_stale_home_manager_backups, detect_flake_dir, get_hostname, get_target_user,
-    print_err, print_info, print_step, print_success, print_sync, print_warn, prompt_confirm,
+    print_info, print_step, print_success, print_sync, print_warn, prompt_confirm,
     run_interactive,
 };
 
@@ -111,7 +111,7 @@ pub fn execute_rebuild(opts: RebuildOptions) -> Result<()> {
         return run_interactive(&mut cmd);
     }
 
-    let flake_dir = detect_flake_dir(opts.flake_dir.as_deref())?;
+    let flake_dir = detect_flake_dir(opts.flake_dir.as_deref())? ;
     let host = opts.host.unwrap_or_else(get_hostname);
 
     // Update flake inputs if requested (-u)

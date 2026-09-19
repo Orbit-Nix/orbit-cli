@@ -1,12 +1,12 @@
 // OrbitOS — Encrypted secrets management (age/tar archive store and restore)
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use crate::cli::SecretsCommands;
-use crate::ssh::{default_ssh_archive, has_ssh_keys};
+use crate::ssh::default_ssh_archive;
 use crate::util::{
     get_target_user, print_err, print_info, print_step, print_success, print_sync, set_permissions,
 };
@@ -142,7 +142,9 @@ pub fn restore_secret(
                 archive.display()
             ));
 
-            fs::create_dir_all(&ssh_dir)?;\n\n            let mut age_cmd = Command::new("age")
+            fs::create_dir_all(&ssh_dir)?;
+
+            let mut age_cmd = Command::new("age")
                 .arg("-d")
                 .arg(&archive)
                 .stdin(Stdio::inherit())
