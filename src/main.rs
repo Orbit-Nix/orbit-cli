@@ -143,7 +143,7 @@ fn main() -> anyhow::Result<()> {
             execute_rebuild(opts)?;
         }
         Some(Commands::Shell { shell }) => {
-            shell::handle_shell_command(shell)?;\
+            shell::handle_shell_command(shell)?;
         }
         Some(Commands::Run { query }) => {
             run::handle_run(&query, false)?;
