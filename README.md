@@ -1,26 +1,68 @@
 # Orbit CLI (`orbit`)
 
-Fast, unified system management, imperative package runner, and rebuilder CLI for OrbitOS / NixOS.
+Fast all-in-one NixOS CLI tool and OrbitOS installer.
+Unified system management, imperative package runner, rebuilder & updater, and more!
 
 ---
 
+## Notice!
+Orbit-CLI is in very early stages, please use with caution.
+Any contributions are very welcome!
+
 ## Quick Start
 
-You can run and use `orbit` immediately on **any** NixOS system without modifying your configuration:
+### 1. OrbitOS Installation (Full NixOS System Template)
+If you want to install and use the full OrbitOS operating system:
 
-### Method 1: Drop into an interactive shell with `orbit`
+1. **Clone or initialize the template**:
+   ```bash
+   git clone https://github.com/m-uvex/NixOS /etc/nixos
+   cd /etc/nixos
+   ```
+
+2. **Configure your user**:
+   - In `flake.nix`, set `username = "yourusername";` (or keep `"user"`).
+   - In `users/<username>/default.nix`, set your initial/hashed password and add your SSH public keys to `openssh.authorizedKeys.keys`.
+
+3. **Generate hardware configuration for your target host**:
+   ```bash
+   # Choose an archetype: desktop, laptop, or server
+   sudo nixos-generate-config --dir ./hosts/desktop
+   ```
+
+4. **Enable hardware profiles (CPU & GPU)**:
+   - In `hosts/desktop/default.nix`, uncomment the matching hardware modules (e.g. `../../modules/hardware/amd-cpu.nix`, `../../modules/hardware/nvidia-desktop.nix`, etc.).
+
+5. **Install & apply**:
+   - **Fresh install from Live USB**:
+     ```bash
+     sudo nixos-install --flake .#desktop
+     ```
+   - **Existing NixOS system**:
+     ```bash
+     sudo nixos-rebuild switch --flake .#desktop
+     ```
+     
+#### And you're *in Orbit!*
+
+---
+
+### 2. Orbit-CLI Installation (Only CLI on Non-OrbitOS NixOS Configs)
+If you only want to use the `orbit` CLI on your own existing NixOS configuration:
+
+#### Method 1: Drop into an interactive shell with `orbit`
 ```bash
 nix-shell -p '(import (builtins.fetchTarball "https://github.com/m-uvex/NixOS/archive/main.tar.gz") {}).orbit'
 ```
 
-### Method 2: Run directly via `nix run`
+#### Method 2: Run via `nix run`
 ```bash
 nix run github:m-uvex/NixOS#orbit -- rebuild -u
-# or locally:
+# or locally: (Inside the cloned repo)
 nix run .#default -- run firefox
 ```
 
-### Method 3: Add to your system configuration (Declarative)
+#### Method 3: Add to your system configuration (Declarative)
 In your `flake.nix` or NixOS configuration:
 ```nix
 # Add orbit flake input:
@@ -31,6 +73,8 @@ environment.systemPackages = [
   inputs.orbit.packages.${system}.default
 ];
 ```
+
+#### And you're *in Orbit!*
 
 ---
 
