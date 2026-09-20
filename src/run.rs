@@ -234,7 +234,7 @@ pub fn handle_run(query: &str, is_gui: bool) -> Result<()> {
         let mut shell_cmd = Command::new("nix-shell");
         shell_cmd.arg("-p");
         for attr in &chosen_attrs {
-            shell_cmd.arg(format!("nixpkgs#{}", attr));
+            shell_cmd.arg(attr);
         }
         shell_cmd.arg("--run").arg(&prog_to_run);
 
@@ -246,7 +246,7 @@ pub fn handle_run(query: &str, is_gui: bool) -> Result<()> {
         let mut shell_cmd = Command::new("nix-shell");
         shell_cmd.arg("-p");
         for attr in &chosen_attrs {
-            shell_cmd.arg(format!("nixpkgs#{}", attr));
+            shell_cmd.arg(attr);
         }
 
         run_interactive(&mut shell_cmd)?;
