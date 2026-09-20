@@ -1,8 +1,7 @@
 // OrbitOS — Modular Desktop Shell Switcher and Lifecycle Manager
 
-use std::fs;
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
-use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
@@ -44,16 +43,27 @@ pub fn normalize_shell_name(name: &str) -> Option<&'static str> {
 
 pub fn kill_running_shells() {
     print_info("Stopping existing desktop shell processes...");
-    let targets = ["qs", "quickshell", "dms", "dms-greeter", "dgop"];
+    let targets = ["qs", "quickshell", "dms", "dms-greeter", "dgop", "cava"];
     for target in targets {
-        let _ = Command::new("killall")
-            .arg("-q")
+        let _ = Command::new("pkill")
+            .arg("-x")
             .arg(target)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
     }
-    thread::sleep(Duration::from_millis(400));
+    thread::sleep(Duration::from_millis(300));
+
+    // Force kill any remaining stubborn instances
+    for target in targets {
+        let _ = Command::new("pkill")
+            .arg("-9")
+            .arg("-x")
+            .arg(target)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
 }
 
 fn command_exists(cmd: &str) -> bool {
@@ -79,7 +89,34 @@ pub fn spawn_shell(shell: &str) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    print_info(&format!("Spawning shell: {}", shell));
+    // Ensure log directory exists
+    let log_dir = PathBuf::from(&home).join(".cache/orbitos");
+    let _ = fs::create_dir_all(&log_dir);
+    let log_path = log_dir.join(format!("{}.log", shell));
+
+    let log_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&log_path)
+        .unwrap_or_else(|_| {
+            File::create("/dev/null").expect("Failed to open fallback log destination")
+        });
+
+    let err_file = log_file.try_clone().unwrap_or_else(|_| {
+        File::create("/dev/null").expect("Failed to open fallback error destination")
+    });
+
+    // Verify config directory exists if quickshell config
+    let qs_config_dir = PathBuf::from(&home).join(".config/quickshell").join(shell);
+    if (shell == "end4-pC" || shell == "midnight") && !qs_config_dir.exists() {
+        print_warn(&format!(
+            "Configuration directory ~/.config/quickshell/{} not found. You may need to rebuild your NixOS configuration once.",
+            shell
+        ));
+    }
+
+    print_info(&format!("Spawning shell: {} (logs: {})", shell, log_path.display()));
 
     let mut cmd = match shell {
         "end4-pC" => {
@@ -110,10 +147,9 @@ pub fn spawn_shell(shell: &str) -> anyhow::Result<()> {
     };
 
     cmd.env("qsConfig", shell);
-    cmd.stdout(Stdio::null());
-    cmd.stderr(Stdio::null());
+    cmd.stdout(Stdio::from(log_file));
+    cmd.stderr(Stdio::from(err_file));
     cmd.stdin(Stdio::null());
-    cmd.process_group(0);
 
     match cmd.spawn() {
         Ok(_) => {

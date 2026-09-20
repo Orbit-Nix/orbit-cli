@@ -104,6 +104,22 @@ pub enum Commands {
         #[arg(long = "config")]
         config: Option<String>,
     },
+
+    /// Play the full Orbit animation easter egg
+    #[command(name = "orbit")]
+    Orbit,
+
+    /// Play the heart animation easter egg (<3)
+    #[command(name = "love", alias = "luv", alias = "heart")]
+    Love,
+
+    /// Play the mini animation easter egg (mini-orbit or mini-heart)
+    #[command(name = "mini", alias = "mini-orbit", alias = "orbt")]
+    Mini {
+        /// Variant: "orbit" or "heart" / "love" / "<3" / "luv"
+        #[arg(default_value = "orbit")]
+        variant: Option<String>,
+    },
 }
 
 //=========================================#

@@ -1,5 +1,6 @@
 // OrbitOS — Unified system rebuilder, sync, package runner, and secret management CLI
 
+mod animation;
 mod chats;
 mod cli;
 mod distro;
@@ -29,13 +30,82 @@ fn main() -> anyhow::Result<()> {
 
     let args: Vec<String> = std::env::args().collect();
 
-    // Support legacy rebuild argument style (e.g., "orbit switch", "orbit update", etc.)
+    let prog_name = args.first()
+        .and_then(|p| std::path::Path::new(p).file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("orbit");
+
+    let is_orbt = prog_name == "orbt" || prog_name.ends_with("/orbt");
+
+    // Case 1: Invoked with no arguments at all (e.g., "orbit" or "orbt")
+    if args.len() <= 1 {
+        if is_orbt {
+            return animation::play_animation(animation::AnimationType::MiniOrbit);
+        } else {
+            return animation::play_animation(animation::AnimationType::Orbit);
+        }
+    }
+
+    // Case 2: Early easter egg interception and legacy rebuild argument support
     if args.len() > 1 {
         let first_arg = args[1].as_str();
-        if first_arg == "shell" {
-            let shell_arg = args.get(2).cloned();
-            return shell::handle_shell_command(shell_arg);
+
+        match first_arg {
+            "love" | "luv" | "<3" | "heart" => {
+                if is_orbt {
+                    return animation::play_animation(animation::AnimationType::MiniHeart);
+                } else {
+                    return animation::play_animation(animation::AnimationType::Heart);
+                }
+            }
+            "mini-love" | "mini-luv" | "mini-heart" | "minilove" | "miniluv" | "miniheart" => {
+                return animation::play_animation(animation::AnimationType::MiniHeart);
+            }
+            "mini" | "mini-orbit" | "miniorbit" => {
+                if let Some(second_arg) = args.get(2).map(|s| s.as_str()) {
+                    match second_arg {
+                        "love" | "luv" | "<3" | "heart" => {
+                            return animation::play_animation(animation::AnimationType::MiniHeart);
+                        }
+                        _ => {
+                            return animation::play_animation(animation::AnimationType::MiniOrbit);
+                        }
+                    }
+                }
+                return animation::play_animation(animation::AnimationType::MiniOrbit);
+            }
+            "orbt" => {
+                if let Some(second_arg) = args.get(2).map(|s| s.as_str()) {
+                    match second_arg {
+                        "love" | "luv" | "<3" | "heart" => {
+                            return animation::play_animation(animation::AnimationType::MiniHeart);
+                        }
+                        _ => {
+                            return animation::play_animation(animation::AnimationType::MiniOrbit);
+                        }
+                    }
+                }
+                return animation::play_animation(animation::AnimationType::MiniOrbit);
+            }
+            "orbit" => {
+                if let Some(second_arg) = args.get(2).map(|s| s.as_str()) {
+                    match second_arg {
+                        "love" | "luv" | "<3" | "heart" => {
+                            return animation::play_animation(animation::AnimationType::Heart);
+                        }
+                        _ => {}
+                    }
+                } else if args.len() == 2 {
+                    return animation::play_animation(animation::AnimationType::Orbit);
+                }
+            }
+            "shell" => {
+                let shell_arg = args.get(2).cloned();
+                return shell::handle_shell_command(shell_arg);
+            }
+            _ => {}
         }
+
         let known_actions = ["switch", "test", "boot", "build", "build-only", "dry", "clean"];
         if known_actions.contains(&first_arg) {
             let opts = cli::parse_flexible_rebuild_args(&args[1..], None);
@@ -73,7 +143,7 @@ fn main() -> anyhow::Result<()> {
             execute_rebuild(opts)?;
         }
         Some(Commands::Shell { shell }) => {
-            shell::handle_shell_command(shell)?;
+            shell::handle_shell_command(shell)?;\
         }
         Some(Commands::Run { query }) => {
             run::handle_run(&query, false)?;
@@ -173,22 +243,32 @@ fn main() -> anyhow::Result<()> {
         Some(Commands::Install { config }) => {
             install::install_orbit(config.as_deref())?;
         }
+        Some(Commands::Orbit) => {
+            animation::play_animation(animation::AnimationType::Orbit)?;
+        }
+        Some(Commands::Love) => {
+            if is_orbt {
+                animation::play_animation(animation::AnimationType::MiniHeart)?;
+            } else {
+                animation::play_animation(animation::AnimationType::Heart)?;
+            }
+        }
+        Some(Commands::Mini { variant }) => {
+            match variant.as_deref() {
+                Some("love") | Some("luv") | Some("<3") | Some("heart") => {
+                    animation::play_animation(animation::AnimationType::MiniHeart)?;
+                }
+                _ => {
+                    animation::play_animation(animation::AnimationType::MiniOrbit)?;
+                }
+            }
+        }
         None => {
-            // Default action: rebuild switch on current host
-            let opts = RebuildOptions {
-                action: rebuild::RebuildAction::Switch,
-                host: None,
-                flake_dir: cli.flake,
-                update: false,
-                dry: false,
-                ask: false,
-                show_trace: false,
-                extra_args: Vec::new(),
-                no_chat_sync: false,
-                no_ssh_prompt: false,
-                no_hypr_reload: false,
-            };
-            execute_rebuild(opts)?;
+            if is_orbt {
+                animation::play_animation(animation::AnimationType::MiniOrbit)?;
+            } else {
+                animation::play_animation(animation::AnimationType::Orbit)?;
+            }
         }
     }
 
