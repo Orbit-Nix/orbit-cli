@@ -125,9 +125,13 @@ pub fn spawn_shell(shell: &str) -> anyhow::Result<()> {
             c
         }
         "midnight" => {
-            let mut c = Command::new("qs");
-            c.arg("-c").arg("midnight");
-            c
+            if command_exists("caelestia-shell") {
+                Command::new("caelestia-shell")
+            } else {
+                let mut c = Command::new("qs");
+                c.arg("-c").arg("midnight");
+                c
+            }
         }
         "dms" => {
             if command_exists("dms") {
