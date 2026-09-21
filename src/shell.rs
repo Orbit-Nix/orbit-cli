@@ -43,7 +43,7 @@ pub fn normalize_shell_name(name: &str) -> Option<&'static str> {
 
 pub fn kill_running_shells() {
     print_info("Stopping existing desktop shell processes...");
-    let targets = ["qs", "quickshell", "dms", "dms-greeter", "dgop", "cava"];
+    let targets = ["qs", "quickshell", ".quickshell-wra", "caelestia-shell", "dms", "dms-greeter", "dgop", "cava"];
     for target in targets {
         let _ = Command::new("pkill")
             .arg("-x")
