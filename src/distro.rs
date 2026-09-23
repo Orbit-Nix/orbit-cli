@@ -1,4 +1,4 @@
-// OrbitOS — Host operating system detection and compatibility guard
+// OrbitOS — Host OS detection and compatibility guard
 
 use std::fs;
 use anyhow::{bail, Result};

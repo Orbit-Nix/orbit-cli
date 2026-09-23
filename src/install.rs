@@ -1,4 +1,4 @@
-// OrbitOS — Fresh system installer and repository bootstrapper
+// OrbitOS — Fresh system installer and repo bootstrapper
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -51,7 +51,7 @@ pub fn install_orbit(custom_config: Option<&str>) -> Result<()> {
             final_config_dir = cwd;
         } else {
             // Clone default repository
-            let default_repo = "https://github.com/m-uvex/NixOS.git";
+            let default_repo = "https://github.com/Orbit-Nix/OrbitOS.git";
             let clone_dest = if target_orbitos.exists() {
                 fallback_orbitos.clone()
             } else {

@@ -1,4 +1,4 @@
-// OrbitOS — Antigravity IDE conversation history synchronizer and state.vscdb manager
+// OrbitOS — Antigravity IDE conversation history and state.vscdb sync
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -101,7 +101,7 @@ pub fn sync_chats(custom_home: Option<&Path>) -> Result<usize> {
         }
 
         let ws_bytes = ws_bytes.unwrap_or_else(|| {
-            make_ws_info(&uri, "user/NixOS", "git@github.com:user/NixOS.git", "main")
+            make_ws_info(&uri, "Orbit-Nix/orbit-config", "git@github.com:Orbit-Nix/orbit-config.git", "main")
         });
         let created_ts_bytes = created_ts_bytes.unwrap_or_else(|| make_timestamp(mtime_secs, 0));
 

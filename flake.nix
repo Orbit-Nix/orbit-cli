@@ -33,7 +33,7 @@
           # Runtime dependencies wrapped or used by orbit
           meta = with pkgs.lib; {
             description = "Fast, modular system manager, rebuilder, and secret management CLI for NixOS / OrbitOS";
-            homepage = "https://github.com/m-uvex/NixOS";
+            homepage = "https://github.com/Orbit-Nix/orbit-cli";
             license = licenses.mit;
             mainProgram = "orbit";
           };

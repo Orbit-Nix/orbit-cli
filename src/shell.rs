@@ -1,4 +1,4 @@
-// OrbitOS — Modular Desktop Shell Switcher and Lifecycle Manager
+// OrbitOS - Modular Desktop Shell Switcher
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
@@ -41,6 +41,7 @@ pub fn normalize_shell_name(name: &str) -> Option<&'static str> {
     }
 }
 
+// Kill any related instances
 pub fn kill_running_shells() {
     print_info("Stopping existing desktop shell processes...");
     let targets = ["qs", "quickshell", ".quickshell-wra", "caelestia-shell", "dms", "dms-greeter", "dgop", "cava"];
@@ -53,8 +54,6 @@ pub fn kill_running_shells() {
             .status();
     }
     thread::sleep(Duration::from_millis(300));
-
-    // Force kill any remaining stubborn instances
     for target in targets {
         let _ = Command::new("pkill")
             .arg("-9")
@@ -89,7 +88,7 @@ pub fn spawn_shell(shell: &str) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // Ensure log directory exists
+    // Log stuff
     let log_dir = PathBuf::from(&home).join(".cache/orbitos");
     let _ = fs::create_dir_all(&log_dir);
     let log_path = log_dir.join(format!("{}.log", shell));

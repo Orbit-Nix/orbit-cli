@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_make_ws_info() {
-        let ws = make_ws_info("file:///etc/nixos", "user/NixOS", "git@github.com:user/NixOS.git", "main");
+        let ws = make_ws_info("file:///etc/nixos", "Orbit-Nix/orbit-config", "git@github.com:Orbit-Nix/orbit-config.git", "main");
         let parsed = parse_proto(&ws);
         assert_eq!(parsed.get_first_string(1), Some("file:///etc/nixos".to_string()));
         assert_eq!(parsed.get_first_string(2), Some("file:///etc/nixos".to_string()));
@@ -244,7 +244,7 @@ mod tests {
 
         let repo_bytes = parsed.get_first_bytes(3).expect("repo_msg");
         let repo_parsed = parse_proto(repo_bytes);
-        assert_eq!(repo_parsed.get_first_string(1), Some("user/NixOS".to_string()));
-        assert_eq!(repo_parsed.get_first_string(2), Some("git@github.com:user/NixOS.git".to_string()));
+        assert_eq!(repo_parsed.get_first_string(1), Some("Orbit-Nix/orbit-config".to_string()));
+        assert_eq!(repo_parsed.get_first_string(2), Some("git@github.com:Orbit-Nix/orbit-config.git".to_string()));
     }
 }

@@ -1,77 +1,51 @@
 # Orbit CLI (`orbit`)
 
-Fast all-in-one NixOS CLI tool and OrbitOS installer.
+Fast all-in-one NixOS CLI tool and [OrbitOS](https://github.com/Orbit-Nix/OrbitOS) installer.
 Unified system management, imperative package runner, rebuilder & updater, and more!
 
 ---
 
-## Notice!
-Orbit-CLI is in very early stages, please use with caution.
-Any contributions are very welcome!
+> [!WARNING]
+> Orbit-CLI is in very early stages, please use with caution.   
+> Any contributions are very welcome!
+
+> [!NOTE]
+> Here to install or build your own [OrbitOS](https://github.com/Orbit-Nix/OrbitOS)?    
+> Please read [The OS building and installation guide](https://github.com/Orbit-Nix/orbit-cli/blob/main/INSTALLOS.md).
 
 ## Quick Start
 
-### 1. OrbitOS Installation (Full NixOS System Template)
-If you want to install and use the full OrbitOS operating system:
+While Orbit-CLI is meant to be used on OrbitOS, it is also available (with limited features) for any NixOS config, also including the OrbitOS builder.
+You can install and use Orbit-CLI with one of 3 methods;
 
-1. **Clone or initialize the template**:
-   ```bash
-   git clone https://github.com/m-uvex/NixOS /etc/nixos
-   cd /etc/nixos
-   ```
-
-2. **Configure your user**:
-   - In `flake.nix`, set `username = "yourusername";` (or keep `"user"`).
-   - In `users/<username>/default.nix`, set your initial/hashed password and add your SSH public keys to `openssh.authorizedKeys.keys`.
-
-3. **Generate hardware configuration for your target host**:
-   ```bash
-   # Choose an archetype: desktop, laptop, or server
-   sudo nixos-generate-config --dir ./hosts/desktop
-   ```
-
-4. **Enable hardware profiles (CPU & GPU)**:
-   - In `hosts/desktop/default.nix`, uncomment the matching hardware modules (e.g. `../../modules/hardware/amd-cpu.nix`, `../../modules/hardware/nvidia-desktop.nix`, etc.).
-
-5. **Install & apply**:
-   - **Fresh install from Live USB**:
-     ```bash
-     sudo nixos-install --flake .#desktop
-     ```
-   - **Existing NixOS system**:
-     ```bash
-     sudo nixos-rebuild switch --flake .#desktop
-     ```
-     
-#### And you're *in Orbit!*
-
----
-
-### 2. Orbit-CLI Installation (Only CLI on Non-OrbitOS NixOS Configs)
-If you only want to use the `orbit` CLI on your own existing NixOS configuration:
-
-#### Method 1: Drop into an interactive shell with `orbit`
+#### Method 1: Drop into an interactive shell with `orbit` (Imperative)
 ```bash
-nix-shell -p '(import (builtins.fetchTarball "https://github.com/m-uvex/NixOS/archive/main.tar.gz") {}).orbit'
+nix-shell -p '(import (builtins.fetchTarball "https://github.com/Orbit-Nix/orbit-cli/archive/main.tar.gz") {}).orbit'
 ```
 
-#### Method 2: Run via `nix run`
+#### Method 2: Run via `nix run` (Imperative)
 ```bash
-nix run github:m-uvex/NixOS#orbit -- rebuild -u
-# or locally: (Inside the cloned repo)
-nix run .#default -- run firefox
+nix run github:Orbit-Nix/orbit-cli -- rebuild -u
 ```
 
 #### Method 3: Add to your system configuration (Declarative)
-In your `flake.nix` or NixOS configuration:
+In your `flake.nix`:
 ```nix
-# Add orbit flake input:
-inputs.orbit.url = "github:m-uvex/NixOS";
+{
+  inputs = {
+    # 1. Add orbit flake input:
+    orbit.url = "github:Orbit-Nix/orbit-cli";
+  };
 
-# Include in system or user packages:
-environment.systemPackages = [
-  inputs.orbit.packages.${system}.default
-];
+  outputs = { self, nixpkgs, orbit, ... }: {
+    # ... your nixosSystem configurations ...
+    
+    # 2. Include in system or user packages:
+    environment.systemPackages = [
+      orbit.packages.${pkgs.system}.default
+    ];
+  };
+}
 ```
 
 #### And you're *in Orbit!*
@@ -80,9 +54,12 @@ environment.systemPackages = [
 
 ## Features & Commands
 
-### 1. Interactive Imperative App Runner (`yay`-style)
-- **`orbit run <query>`** — Search packages on Nixpkgs, display formatted & numbered results with versions/descriptions/installed badges, and drop into an interactive `nix-shell` with selected packages.
-  - Supports multi-selection: e.g. `1 2 3`, `1-3`, `1, 4, 5`.
+> [!NOTE]
+> All commands but the builder (not implemented yet) will fail when ran on anything other than NixOS (including forks) as a safeguard so it doesn't mess with your system.
+
+### 1. Interactive Imperative App Runner
+- **`orbit run <query>`** — Inpired by Yay, searches for any app in nixpkgs and let's you pick which to launch, like a search engine.
+  - Supports multi-selection
   ```bash
   orbit run <query> (e.g. sl)
   ```
@@ -110,13 +87,18 @@ environment.systemPackages = [
   2. Overwrite local (reset to remote).
   3. Overwrite remote (commit and force push).
 
-### 4. Secrets Management
-- **`orbit secrets store [--ssh] [--encryption <pass|ssh>]`** — Encrypt and archive `.ssh` into `secrets/ssh.tar.age`.
+### 4. Shell Switcher (OrbitOS only!)
+- **`orbit shell [shell name]`** — Change the active Hyprland dotfiles to any of the following (More to come):
+  1. [end4-pC](https://github.com/pctrade/end4-pC)
+  2. [Midnight](https://github.com/dim-ghub/midnight-shell)
+  3. [DankMaterialShell](https://danklinux.com)
+
+### 5. Secrets Management
+- **`orbit secrets store [--ssh] [--encryption <pass|ssh>]`** — Encrypt and archive ~/.ssh into secrets/ssh.tar.age.
 - **`orbit secrets restore [--ssh] [--encryption <pass|ssh>] [-a archive]`** — Decrypt and restore `.ssh`.
 
-### 5. Installation
+### 6. Installation
 - **`orbit install [--config <path-or-repo>]`** — Prepare configuration (from local directory, clone, or custom path) and trigger `orbit rebuild -u`.
 
-### Notice:
-While this is meant to install and run on OrbitOS, it can also be used on any NixOS installation. Will fail when ran on anything other than NixOS (including forks) tho as a safeguard so it doesn't mess with your system.
-Got ideas? feel free to fork and build with us! or even simply opening up a suggestion issue :D
+> [!TIP]
+> Got ideas? feel free to fork and build with us! or even simply opening up a suggestion issue, we'll take care of it :D

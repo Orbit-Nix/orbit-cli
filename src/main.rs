@@ -37,7 +37,7 @@ fn main() -> anyhow::Result<()> {
 
     let is_orbt = prog_name == "orbt" || prog_name.ends_with("/orbt");
 
-    // Case 1: Invoked with no arguments at all (e.g., "orbit" or "orbt")
+    // Animations / Easter eggs when ran with no argument (orbit or orbt)
     if args.len() <= 1 {
         if is_orbt {
             return animation::play_animation(animation::AnimationType::MiniOrbit);
