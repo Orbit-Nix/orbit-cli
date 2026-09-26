@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
+use std::fmt;
 
 use crate::util::{print_err, print_info, print_success, print_warn};
 
@@ -212,31 +213,76 @@ pub fn print_shell_status() {
     println!("\x1b[1;34m[orbit-shell]\x1b[0m State File: {}", path.display());
 }
 
+#[derive(Clone)]
+struct ShellOption {
+    id: &'static str,
+    name: &'static str,
+    info: &'static str,
+}
+
+impl fmt::Display for ShellOption {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Formatter<'_> {
+        if self.id == "quit" {
+            write!(f, "{:<10} │ \x1b[3m{}\x1b[0m", "quit", self.info)
+        } else {
+            write!(f, "{:<10} │ \x1b[1m{}\x1b[0m - \x1b[2m{}\x1b[0m", self.id, self.name, self.info)
+        }
+    }
+}
+
 pub fn interactive_menu() -> anyhow::Result<()> {
     let current = get_current_shell();
     println!("\n\x1b[1;35mOrbitOS Shell Switcher\x1b[0m (Current: \x1b[1;32m{}\x1b[0m)\n", current);
-    println!("  1) end4-pC   (Illogical Impulse Material 3)");
-    println!("  2) midnight  (Midnight Shell - Caelestia+)");
-    println!("  3) dms       (DankMaterialShell + Plugins)");
-    println!("  4) none      (Disable Desktop Shell)");
-    println!("  q) Quit");
-    print!("\nSelect shell [1-4, q]: ");
-    io::stdout().flush()?;
 
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    let choice = input.trim();
+    let options = vec![
+        ShellOption {
+            id: "end4-pC",
+            name: "Illogical Impulse Material 3",
+            info: "Full widget ecosystem, dynamic sidebar, search & blur.",
+        },
+        ShellOption {
+            id: "midnight",
+            name: "Midnight Shell",
+            info: "Ultra-clean, minimal QML UI (Caelestia fork).",
+        },
+        ShellOption {
+            id: "dms",
+            name: "DankMaterialShell",
+            info: "Modern shell with plugin registry, dgop stats & cava.",
+        },
+        ShellOption {
+            id: "none",
+            name: "Disable Desktop Shell",
+            info: "Bare window manager without desktop shell widgets.",
+        },
+        ShellOption {
+            id: "quit",
+            name: "",
+            info: "Exit without making changes",
+        },
+    ];
 
-    if choice.eq_ignore_ascii_case("q") || choice.is_empty() {
-        println!("Exiting without changes.");
-        return Ok(());
-    }
+    let selection = inquire::Select::new("Select a desktop shell to activate:", options)
+        .with_help_message("Use Up/Down arrows to select, Enter to confirm, Esc/Ctrl-C to cancel")
+        .prompt();
 
-    if let Some(normalized) = normalize_shell_name(choice) {
-        kill_running_shells();
-        spawn_shell(normalized)?;
-    } else {
-        print_err(&format!("Invalid selection '{}'", choice));
+    match selection {
+        Ok(choice) => {
+            if choice.id == "quit" {
+                println!("Exiting without changes.");
+                return Ok(());
+            }
+
+            if let Some(normalized) = normalize_shell_name(choice.id) {
+                kill_running_shells();
+                spawn_shell(normalized)?;
+            } else {
+                print_err(&format!("Invalid selection '{}'", choice.id));
+            }
+        },
+        Err(_) => {
+            println!("Exiting without changes.");
+        }
     }
 
     Ok(())
