@@ -1,7 +1,6 @@
 // OrbitOS - Modular Desktop Shell Switcher
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
@@ -221,7 +220,7 @@ struct ShellOption {
 }
 
 impl fmt::Display for ShellOption {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Formatter<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.id == "quit" {
             write!(f, "{:<10} │ \x1b[3m{}\x1b[0m", "quit", self.info)
         } else {
