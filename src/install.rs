@@ -8,6 +8,22 @@ use crate::util::{get_target_user, print_step, print_success, run_interactive};
 
 // Bootstrap OrbitOS configuration from a repository or existing local directory
 pub fn install_orbit(custom_config: Option<&str>) -> Result<()> {
+    if custom_config.is_none() {
+        // Launch the interactive architecture and host wizard
+        if let Some(state) = crate::installer::run_installer()? {
+            print_success(&format!(
+                "Installer wizard complete: {} account(s), {} host(s) configured.",
+                state.accounts.len(),
+                state.hosts.len()
+            ));
+            // Backend generation will hook in here next
+            return Ok(());
+        } else {
+            print_step("Installation wizard cancelled.");
+            return Ok(());
+        }
+    }
+
     let user_info = get_target_user();
     let home = &user_info.home_dir;
     let target_orbitos = Path::new("/orbitos");

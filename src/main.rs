@@ -5,6 +5,7 @@ mod chats;
 mod cli;
 mod distro;
 mod install;
+pub mod installer;
 mod proto;
 mod rebuild;
 mod run;
