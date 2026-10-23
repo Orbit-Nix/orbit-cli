@@ -27,16 +27,25 @@ pub fn get_current_shell() -> String {
             }
         }
     }
-    // Default fallback
-    "end4-pC".to_string()
+    // Default fallback (matches mySystem.desktop.shell default)
+    "illogical-impulse".to_string()
 }
 
 pub fn normalize_shell_name(name: &str) -> Option<&'static str> {
     match name.to_lowercase().as_str() {
-        "end4-pc" | "end4" | "ii" | "illogical-impulse" | "1" => Some("end4-pC"),
-        "midnight" | "midnight-shell" | "caelestia" | "2" => Some("midnight"),
-        "dms" | "dankmaterialshell" | "dank-material-shell" | "3" => Some("dms"),
-        "none" | "off" | "disabled" | "4" => Some("none"),
+        // Illogical Impulse family (parent or specific child)
+        "illogical-impulse" | "illogical" | "impulse" | "1" => Some("illogical-impulse"),
+        "end4-pc" | "end4" | "end-4" => Some("end4-pC"),
+        "ii-vynx" | "vynx" | "3" => Some("ii-vynx"),
+        // Caelestia family (parent or specific child)
+        "caelestia" | "4" => Some("caelestia"),
+        "midnight" | "midnight-shell" => Some("midnight"),
+        // DMS (no children)
+        "dms" | "dankmaterialshell" | "dank-material-shell" | "dank" | "5" => Some("dms"),
+        // Noctalia (no children)
+        "noctalia" | "6" => Some("noctalia"),
+        // Disabled
+        "none" | "off" | "disabled" | "7" => Some("none"),
         _ => None,
     }
 }
@@ -44,7 +53,10 @@ pub fn normalize_shell_name(name: &str) -> Option<&'static str> {
 // Kill any related instances
 pub fn kill_running_shells() {
     print_info("Stopping existing desktop shell processes...");
-    let targets = ["qs", "quickshell", ".quickshell-wra", "caelestia-shell", "dms", "dms-greeter", "dgop", "cava"];
+    let targets = [
+        "qs", "quickshell", ".quickshell-wra", "caelestia-shell", "dms", "dms-greeter", "dgop",
+        "cava", "noctalia-shell",
+    ];
     for target in targets {
         let _ = Command::new("pkill")
             .arg("-x")
@@ -73,6 +85,17 @@ fn command_exists(cmd: &str) -> bool {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+// Quickshell config directory backing a shell (parents map to their default child)
+fn qs_config_for(shell: &str) -> &'static str {
+    match shell {
+        "illogical-impulse" | "end4-pC" => "end4-pC",
+        "ii-vynx" => "ii-vynx",
+        "caelestia" | "midnight" => "midnight",
+        "noctalia" => "noctalia",
+        _ => "",
+    }
 }
 
 pub fn spawn_shell(shell: &str) -> anyhow::Result<()> {
@@ -106,24 +129,34 @@ pub fn spawn_shell(shell: &str) -> anyhow::Result<()> {
         File::create("/dev/null").expect("Failed to open fallback error destination")
     });
 
-    // Verify config directory exists if quickshell config
-    let qs_config_dir = PathBuf::from(&home).join(".config/quickshell").join(shell);
-    if (shell == "end4-pC" || shell == "midnight") && !qs_config_dir.exists() {
-        print_warn(&format!(
-            "Configuration directory ~/.config/quickshell/{} not found. You may need to rebuild your NixOS configuration once.",
-            shell
-        ));
+    // Verify config directory exists if quickshell-backed
+    let qs_config = qs_config_for(shell);
+    if !qs_config.is_empty() {
+        let qs_config_dir = PathBuf::from(&home).join(".config/quickshell").join(qs_config);
+        if !qs_config_dir.exists() {
+            print_warn(&format!(
+                "Configuration directory ~/.config/quickshell/{} not found. You may need to rebuild your NixOS configuration once.",
+                qs_config
+            ));
+        }
     }
 
     print_info(&format!("Spawning shell: {} (logs: {})", shell, log_path.display()));
 
     let mut cmd = match shell {
-        "end4-pC" => {
+        // Illogical Impulse family: parent and default child share the launcher
+        "illogical-impulse" | "end4-pC" => {
             let mut c = Command::new("qs");
             c.arg("-c").arg("end4-pC");
             c
         }
-        "midnight" => {
+        "ii-vynx" => {
+            let mut c = Command::new("qs");
+            c.arg("-c").arg("ii-vynx");
+            c
+        }
+        // Caelestia family: native binary first, quickshell fallback
+        "caelestia" | "midnight" => {
             if command_exists("caelestia-shell") {
                 Command::new("caelestia-shell")
             } else {
@@ -140,6 +173,15 @@ pub fn spawn_shell(shell: &str) -> anyhow::Result<()> {
             } else {
                 let mut c = Command::new("qs");
                 c.arg("-c").arg("dms");
+                c
+            }
+        }
+        "noctalia" => {
+            if command_exists("noctalia-shell") {
+                Command::new("noctalia-shell")
+            } else {
+                let mut c = Command::new("qs");
+                c.arg("-c").arg("noctalia");
                 c
             }
         }
@@ -192,16 +234,19 @@ pub fn print_shell_list() {
     println!("\n\x1b[1;35m===================================================================\x1b[0m");
     println!("\x1b[1;36m                   OrbitOS Available Desktop Shells\x1b[0m");
     println!("\x1b[1;35m===================================================================\x1b[0m");
-    println!("  \x1b[1;32m1) end4-pC\x1b[0m   - Illogical Impulse Material 3 Quickshell suite");
-    println!("                 Full widget ecosystem, dynamic sidebar, search & blur.");
-    println!("");
-    println!("  \x1b[1;32m2) midnight\x1b[0m  - Midnight Shell (dim-ghub/midnight-shell)");
-    println!("                 Refined Caelestia fork with ultra-clean, minimal QML UI.");
-    println!("");
-    println!("  \x1b[1;32m3) dms\x1b[0m       - DankMaterialShell (AvengeMedia/DankMaterialShell)");
-    println!("                 Modern shell with plugin registry, dgop stats & cava.");
-    println!("");
-    println!("  \x1b[1;32m4) none\x1b[0m      - Bare window manager without desktop shell widgets.");
+    println!("  \x1b[1;34m├── Illogical Impulse\x1b[0m (selectable parent or specific child)");
+    println!("  \x1b[1;32m│   ├── 1) illogical-impulse\x1b[0m : Default Illogical Impulse suite");
+    println!("  \x1b[1;32m│   ├── 2) end4-pC\x1b[0m           : Material 3 Quickshell desktop");
+    println!("  \x1b[1;32m│   └── 3) ii-vynx\x1b[0m           : vaguesyntax ii-vynx scrolling-dots fork");
+    println!("  \x1b[1;34m├── Caelestia\x1b[0m (selectable parent or specific child)");
+    println!("  \x1b[1;32m│   ├── 4) caelestia\x1b[0m         : Default Caelestia shell");
+    println!("  \x1b[1;32m│   └── 5) midnight\x1b[0m          : Midnight Shell (dim-ghub/midnight-shell)");
+    println!("  \x1b[1;34m├── DMS\x1b[0m (selectable, no childs)");
+    println!("  \x1b[1;32m│   └── 6) dms\x1b[0m              : DankMaterialShell (AvengeMedia/DankMaterialShell)");
+    println!("  \x1b[1;34m├── Noctalia\x1b[0m (selectable, no childs)");
+    println!("  \x1b[1;32m│   └── 7) noctalia\x1b[0m         : Noctalia Shell");
+    println!("  \x1b[1;34m└── none\x1b[0m");
+    println!("      Bare window manager without desktop shell widgets.");
     println!("\x1b[1;35m===================================================================\x1b[0m\n");
 }
 
@@ -215,6 +260,7 @@ pub fn print_shell_status() {
 #[derive(Clone)]
 struct ShellOption {
     id: &'static str,
+    family: &'static str,
     name: &'static str,
     info: &'static str,
 }
@@ -222,9 +268,15 @@ struct ShellOption {
 impl fmt::Display for ShellOption {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.id == "quit" {
-            write!(f, "{:<10} │ \x1b[3m{}\x1b[0m", "quit", self.info)
+            write!(f, "{:<18} │ \x1b[3m{}\x1b[0m", "quit", self.info)
+        } else if self.family.is_empty() {
+            write!(f, "{:<18} │ \x1b[2m{}\x1b[0m", self.id, self.info)
         } else {
-            write!(f, "{:<10} │ \x1b[1m{}\x1b[0m - \x1b[2m{}\x1b[0m", self.id, self.name, self.info)
+            write!(
+                f,
+                "{:<18} │ \x1b[34m{:<16}\x1b[0m \x1b[1m{}\x1b[0m - \x1b[2m{}\x1b[0m",
+                self.id, self.family, self.name, self.info
+            )
         }
     }
 }
@@ -233,29 +285,60 @@ pub fn interactive_menu() -> anyhow::Result<()> {
     let current = get_current_shell();
     println!("\n\x1b[1;35mOrbitOS Shell Switcher\x1b[0m (Current: \x1b[1;32m{}\x1b[0m)\n", current);
 
+    // Tree order mirrors modules/desktop/shells.nix: families with selectable
+    // parents, followed by their specific children.
     let options = vec![
         ShellOption {
+            id: "illogical-impulse",
+            family: "Illogical Impulse",
+            name: "Default II",
+            info: "Default Illogical Impulse suite.",
+        },
+        ShellOption {
             id: "end4-pC",
-            name: "Illogical Impulse Material 3",
+            family: "Illogical Impulse",
+            name: "Material 3",
             info: "Full widget ecosystem, dynamic sidebar, search & blur.",
         },
         ShellOption {
+            id: "ii-vynx",
+            family: "Illogical Impulse",
+            name: "ii-vynx",
+            info: "vaguesyntax ii-vynx scrolling-dots fork.",
+        },
+        ShellOption {
+            id: "caelestia",
+            family: "Caelestia",
+            name: "Default Caelestia",
+            info: "Default Caelestia shell.",
+        },
+        ShellOption {
             id: "midnight",
+            family: "Caelestia",
             name: "Midnight Shell",
             info: "Ultra-clean, minimal QML UI (Caelestia fork).",
         },
         ShellOption {
             id: "dms",
+            family: "DMS",
             name: "DankMaterialShell",
             info: "Modern shell with plugin registry, dgop stats & cava.",
         },
         ShellOption {
+            id: "noctalia",
+            family: "Noctalia",
+            name: "Noctalia",
+            info: "Noctalia Shell.",
+        },
+        ShellOption {
             id: "none",
-            name: "Disable Desktop Shell",
+            family: "",
+            name: "",
             info: "Bare window manager without desktop shell widgets.",
         },
         ShellOption {
             id: "quit",
+            family: "",
             name: "",
             info: "Exit without making changes",
         },
@@ -317,7 +400,10 @@ pub fn handle_shell_command(shell_arg: Option<String>) -> anyhow::Result<()> {
                         spawn_shell(normalized)?;
                         Ok(())
                     } else {
-                        print_err(&format!("Unknown shell '{}'. Available: end4-pC, midnight, dms, none", name));
+                        print_err(&format!(
+                            "Unknown shell '{}'. Available: illogical-impulse, end4-pC, ii-vynx, caelestia, midnight, dms, noctalia, none",
+                            name
+                        ));
                         print_shell_list();
                         std::process::exit(1);
                     }

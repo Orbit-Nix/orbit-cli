@@ -88,10 +88,19 @@ In your `flake.nix`:
   3. Overwrite remote (commit and force push).
 
 ### 4. Shell Switcher (OrbitOS only!)
-- **`orbit shell [shell name]`** — Change the active Hyprland dotfiles to any of the following (More to come):
-  1. [end4-pC](https://github.com/pctrade/end4-pC)
-  2. [Midnight](https://github.com/dim-ghub/midnight-shell)
-  3. [DankMaterialShell](https://danklinux.com)
+- **`orbit shell [shell name]`** — Change the active Hyprland dotfiles. Shells are grouped by family; parents and specific children are both selectable:
+  - **Illogical Impulse**
+    1. `illogical-impulse` — Default Illogical Impulse suite
+    2. `end4-pC` — [Material 3 Quickshell desktop](https://github.com/pctrade/end4-pC)
+    3. `ii-vynx` — [vaguesyntax ii-vynx scrolling-dots fork](https://github.com/vaguesyntax/ii-vynx)
+  - **Caelestia**
+    4. `caelestia` — Default Caelestia shell
+    5. `midnight` — [Midnight Shell (Caelestia fork)](https://github.com/dim-ghub/midnight-shell)
+  - **DMS**
+    6. `dms` — [DankMaterialShell](https://danklinux.com)
+  - **Noctalia**
+    7. `noctalia` — Noctalia Shell
+  - `none` — Bare window manager without desktop shell widgets
 
 ### 5. Secrets Management
 - **`orbit secrets store [--ssh] [--encryption <pass|ssh>]`** — Encrypt and archive ~/.ssh into secrets/ssh.tar.age.
