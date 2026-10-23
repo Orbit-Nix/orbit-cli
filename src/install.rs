@@ -16,7 +16,57 @@ pub fn install_orbit(custom_config: Option<&str>) -> Result<()> {
                 state.accounts.len(),
                 state.hosts.len()
             ));
-            // Backend generation will hook in here next
+
+            let repo_dir = crate::installer::git_sync::get_orbitos_dir();
+            let primary_host = state
+                .hosts
+                .first()
+                .map(|h| h.hostname.clone())
+                .unwrap_or_else(|| "laptop".to_string());
+
+            if state.bundle_ssh_secrets {
+                print_step("Bundling and encrypting SSH fleet identity with orbit secrets...");
+                let _ = crate::secrets::store_secret("ssh", "pass", None);
+            }
+
+            match state.chosen_deployment {
+                Some(crate::installer::types::DeploymentChoice::InstallLocal) => {
+                    print_step(&format!(
+                        "Applying OrbitOS configuration for host '{}' on local machine...",
+                        primary_host
+                    ));
+                    let mut cmd = Command::new("sudo");
+                    cmd.arg("nixos-rebuild")
+                        .arg("switch")
+                        .arg("--flake")
+                        .arg(format!("{}#{}", repo_dir.display(), primary_host));
+
+                    let _ = run_interactive(&mut cmd);
+                    print_success("Local OrbitOS system installation complete!");
+                }
+                Some(crate::installer::types::DeploymentChoice::RemoteNixosAnywhere) => {
+                    crate::util::print_info(&format!(
+                        "Configuration pushed to GitHub. To deploy to your remote machine via SSH, run:\n  nixos-anywhere --flake {}#{} root@<target-ip>",
+                        repo_dir.display(), primary_host
+                    ));
+                }
+                Some(crate::installer::types::DeploymentChoice::BuildIsoFlashUsb) => {
+                    crate::util::print_info(&format!(
+                        "Configuration pushed to GitHub. To build the bootable installer ISO, run:\n  nix build {}#nixosConfigurations.portable.config.system.build.isoImage",
+                        repo_dir.display()
+                    ));
+                }
+                Some(crate::installer::types::DeploymentChoice::PushGitOnly) => {
+                    print_success(&format!(
+                        "All configurations successfully saved and pushed to ~/OrbitOS ({}).",
+                        state.github_fork
+                    ));
+                }
+                Some(crate::installer::types::DeploymentChoice::BailOut) | None => {
+                    print_step("Installation cancelled and local state discarded.");
+                }
+            }
+
             return Ok(());
         } else {
             print_step("Installation wizard cancelled.");
